@@ -1,0 +1,33 @@
+# speckit project configuration (ADR-0029): the merged control-plane
+# source of truth. Lives under doc/arch, so it is committed and in guard scope.
+
+[project]
+org = "farchanjo"
+codeRoot = "src"
+layout = "monorepo"
+# license set later via `speckit license set` if desired
+
+# [git]
+# email = "you@example.com"
+
+# The ACTIVE spec scope is the UNION of the static globs below (operator-managed)
+# and derived globs computed at startup: doc/arch/sdd/NNN-slug/** for the active
+# feature (its branch), doc/.specify/**, and doc/arch/** (always). Do NOT list
+# the derived globs here.
+[guard]
+mode = "enforce"
+overrideFlag = "--allow-out-of-spec"
+specScopeGlobs = [
+  "src/**",
+  "package.json",
+  "tsconfig.json",
+  "bunfig.toml",
+  "README.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "GROK.md",
+  "llms.txt",
+  "Makefile",
+  ".gitignore",
+  ".gitlab-ci.yml",
+]
