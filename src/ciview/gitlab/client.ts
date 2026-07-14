@@ -3,13 +3,22 @@ import type { AuthResolved } from "./types.ts";
 export type FetchFn = typeof fetch;
 
 export class GitLabClient {
+  private auth: AuthResolved;
+
   constructor(
-    private readonly auth: AuthResolved,
+    auth: AuthResolved,
     private readonly fetchFn: FetchFn = fetch,
-  ) {}
+  ) {
+    this.auth = auth;
+  }
 
   get host(): string {
     return this.auth.host;
+  }
+
+  /** Swap credentials when the operator picks another glab host. */
+  setAuth(auth: AuthResolved): void {
+    this.auth = auth;
   }
 
   private apiUrl(path: string): string {

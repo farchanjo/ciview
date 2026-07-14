@@ -306,6 +306,7 @@ export function createHandlers(
       pollIntervalMs: p.pollIntervalMs,
       live: p.live,
       sidebarVisible: p.sidebarVisible,
+      gitlabHost: p.gitlabHost ?? null,
     };
     await savePrefs(prefs);
   };

@@ -81,6 +81,15 @@ export interface UiChromeState {
    * Top of stack is nearest parent; empty when at root pipeline of the project.
    */
   pipelineStack: number[];
+  /** Multi-host glab picker modal open. */
+  hostPickerOpen: boolean;
+  /** Cursor in host list. */
+  hostPickerCursor: number;
+  /**
+   * When true, Esc cannot dismiss the picker (first launch, no saved host).
+   * Quit with q still works.
+   */
+  hostPickerRequired: boolean;
 }
 
 export interface QueueMetaState {
@@ -159,6 +168,9 @@ export function createRootStores(initialPrefs: Prefs) {
       termWidth: 120,
       termHeight: 40,
       pipelineStack: [],
+      hostPickerOpen: false,
+      hostPickerCursor: 0,
+      hostPickerRequired: false,
     }),
     queueMeta: createStore<QueueMetaState>({
       inflight: [],

@@ -1,5 +1,11 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import {
+  confirmHostPicker,
+  openHostPickerIfMulti,
+} from "../auth/switchHost.ts";
+import { listAuthenticatedHosts, type GlabHostEntry } from "../auth/resolve.ts";
+import type { GitLabClient } from "../gitlab/client.ts";
 import type { PaneId } from "../gitlab/types.ts";
 import {
   closeJobLog,
@@ -13,6 +19,7 @@ import type { RootStores } from "../state/root.ts";
 import { openUrl } from "../util/openUrl.ts";
 import { StatusBar } from "./chrome/StatusBar.tsx";
 import { HelpOverlay } from "./HelpOverlay.tsx";
+import { HostPickerOverlay } from "./HostPickerOverlay.tsx";
 import { useStore } from "./hooks/useStore.ts";
 import {
   boardJobsInStage,
@@ -35,6 +42,7 @@ import { ProjectSidebar, projectViewFlat } from "./panes/ProjectSidebar.tsx";
 export interface AppProps {
   stores: RootStores;
   queue: JobQueue;
+  client: GitLabClient;
   onQuit: () => void;
 }
 
@@ -50,7 +58,7 @@ function focusCycle(sidebarVisible: boolean, logOpen: boolean): PaneId[] {
   return panes;
 }
 
-export function App({ stores, queue, onQuit }: AppProps) {
+export function App({ stores, queue, client, onQuit }: AppProps) {
   const renderer = useRenderer();
   const chrome = useStore(stores.chrome);
   useStore(stores.session);
@@ -58,6 +66,17 @@ export function App({ stores, queue, onQuit }: AppProps) {
   useStore(stores.selection);
   useStore(stores.pipelines);
   useStore(stores.jobs);
+  const [hostOptions, setHostOptions] = useState<GlabHostEntry[]>([]);
+
+  // Refresh host list when picker opens (and once on mount)
+  useEffect(() => {
+    void listAuthenticatedHosts().then(setHostOptions);
+  }, []);
+  useEffect(() => {
+    if (chrome.hostPickerOpen) {
+      void listAuthenticatedHosts().then(setHostOptions);
+    }
+  }, [chrome.hostPickerOpen]);
 
   // FR-40/45: track terminal size; clamp log scroll on resize
   useEffect(() => {
@@ -100,6 +119,47 @@ export function App({ stores, queue, onQuit }: AppProps) {
       ch.sidebarForce ?? null,
       ch.termWidth,
     );
+
+    // FR-68/69: host picker modal captures keys while open
+    if (ch.hostPickerOpen) {
+      if (key.name === "q") {
+        onQuit();
+        return;
+      }
+      if (key.name === "escape") {
+        if (!ch.hostPickerRequired) {
+          stores.chrome.patch({ hostPickerOpen: false });
+        }
+        return;
+      }
+      if (key.name === "j" || key.name === "down") {
+        const max = Math.max(0, hostOptions.length - 1);
+        stores.chrome.patch({
+          hostPickerCursor: Math.min(max, ch.hostPickerCursor + 1),
+        });
+        return;
+      }
+      if (key.name === "k" || key.name === "up") {
+        stores.chrome.patch({
+          hostPickerCursor: Math.max(0, ch.hostPickerCursor - 1),
+        });
+        return;
+      }
+      if (key.name === "return") {
+        void confirmHostPicker(stores, client, queue);
+        return;
+      }
+      // 1-9 jump + confirm
+      if (key.raw && /^[1-9]$/.test(key.raw)) {
+        const idx = Number(key.raw) - 1;
+        if (idx >= 0 && idx < hostOptions.length) {
+          stores.chrome.patch({ hostPickerCursor: idx });
+          void confirmHostPicker(stores, client, queue);
+        }
+        return;
+      }
+      return;
+    }
 
     if (ch.helpOpen) {
       if (key.name === "escape" || key.raw === "?" || key.name === "?") {
@@ -167,6 +227,12 @@ export function App({ stores, queue, onQuit }: AppProps) {
       // Graceful shutdown: stop poll/queue + restore terminal + exit
       // (Ctrl+C is handled by OpenTUI exitOnCtrlC → main onDestroy)
       onQuit();
+      return;
+    }
+
+    // FR-69: H (shift+h) opens multi-host picker; no-op when ≤1 host
+    if (key.name === "h" && key.shift && !key.ctrl && !key.meta) {
+      void openHostPickerIfMulti(stores, false);
       return;
     }
 
@@ -417,6 +483,16 @@ export function App({ stores, queue, onQuit }: AppProps) {
       {chrome.helpOpen ? (
         <HelpOverlay
           scroll={chrome.helpScroll}
+          termWidth={chrome.termWidth}
+          termHeight={chrome.termHeight}
+        />
+      ) : null}
+      {chrome.hostPickerOpen ? (
+        <HostPickerOverlay
+          hosts={hostOptions}
+          cursor={chrome.hostPickerCursor}
+          required={chrome.hostPickerRequired}
+          currentHost={stores.session.get().host}
           termWidth={chrome.termWidth}
           termHeight={chrome.termHeight}
         />

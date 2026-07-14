@@ -35,5 +35,9 @@ Auth (glab only):
                   glab auth status
 
 Keys (press ? in the app for full help):
-  ?:help  s:sidebar  Tab:pane  j/k  Enter  r:refresh  R:live  o:open  q:quit
+  ?:help  H:host (multi)  s:sidebar  Tab:pane  j/k  Enter  r:refresh  R:live  o:open  q:quit
+
+Multi-host (glab):
+  1 authenticated host  → opens on that host (no picker)
+  2+ hosts              → picker on first run; prefs remember choice; H to switch
 `;

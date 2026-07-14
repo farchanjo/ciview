@@ -1,18 +1,24 @@
 #!/usr/bin/env bun
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { AuthError, resolveAuth } from "./auth/resolve.ts";
+import {
+  AuthError,
+  findHostOption,
+  isGlabInstalled,
+  listAuthenticatedHosts,
+  resolveAuth,
+} from "./auth/resolve.ts";
 import { HELP_TEXT, parseArgs } from "./cli/args.ts";
 import { loadPrefs } from "./config/prefs.ts";
 import { projectFromGitRemote } from "./git/remote.ts";
 import { GitLabClient } from "./gitlab/client.ts";
+import { openProject } from "./nav/openProject.ts";
 import { startPollTimer } from "./poll/timer.ts";
 import { wireSelectionEffects } from "./runtime/effects.ts";
 import { createHandlers } from "./runtime/handlers.ts";
 import type { JobRequest } from "./runtime/jobs.ts";
 import { createJobQueue } from "./runtime/queue.ts";
 import { GRACEFUL_SIGNALS, installGracefulShutdown } from "./runtime/shutdown.ts";
-import { openProject } from "./nav/openProject.ts";
 import { createRootStores } from "./state/root.ts";
 import { App } from "./ui/App.tsx";
 
@@ -23,9 +29,24 @@ async function main() {
     process.exit(0);
   }
 
-  let auth;
+  const prefs = await loadPrefs();
+
+  let hosts;
   try {
-    auth = await resolveAuth();
+    if (!isGlabInstalled()) {
+      throw new AuthError(
+        "glab_not_installed",
+        "glab is not installed (or not on PATH). ciview uses glab for GitLab credentials.",
+        [
+          "Install glab (GitLab CLI):  brew install glab\n" +
+            "     See also: https://gitlab.com/gitlab-org/cli#installation",
+          "Authenticate with glab:  glab auth login\n" +
+            "     Self-hosted example:  glab auth login --hostname git.example.com\n" +
+            "     Then verify:  glab auth status",
+        ],
+      );
+    }
+    hosts = await listAuthenticatedHosts();
   } catch (e) {
     if (e instanceof AuthError) {
       console.error(e.format());
@@ -35,7 +56,43 @@ async function main() {
     process.exit(2);
   }
 
-  const prefs = await loadPrefs();
+  if (hosts.length === 0) {
+    console.error(
+      new AuthError(
+        "glab_not_authenticated",
+        "glab is installed but not authenticated (no hosts with tokens in glab config).",
+        [
+          "Authenticate with glab:  glab auth login\n" +
+            "     Self-hosted example:  glab auth login --hostname git.example.com\n" +
+            "     Then verify:  glab auth status",
+        ],
+      ).format(),
+    );
+    process.exit(2);
+  }
+
+  // FR-63: single host → no picker. FR-64/65: multi → picker if no valid saved host.
+  const saved = findHostOption(hosts, prefs.gitlabHost);
+  const needPicker = hosts.length >= 2 && !saved;
+  const initialHost = saved ?? hosts[0]!;
+
+  let auth;
+  try {
+    auth = await resolveAuth(initialHost.hostname);
+  } catch (e) {
+    if (e instanceof AuthError) {
+      console.error(e.format());
+    } else {
+      console.error(`ciview: ${String(e)}`);
+    }
+    process.exit(2);
+  }
+
+  // Persist auto-chosen single host / valid saved so prefs stay in sync
+  if (!needPicker && prefs.gitlabHost !== initialHost.hostname) {
+    prefs.gitlabHost = initialHost.hostname;
+  }
+
   const stores = createRootStores(prefs);
   stores.session.set({
     host: auth.host,
@@ -43,6 +100,18 @@ async function main() {
     ready: true,
     fatalError: null,
   });
+
+  if (needPicker) {
+    const cursor = Math.max(
+      0,
+      hosts.findIndex((h) => h.hostname === initialHost.hostname),
+    );
+    stores.chrome.patch({
+      hostPickerOpen: true,
+      hostPickerRequired: true,
+      hostPickerCursor: cursor < 0 ? 0 : cursor,
+    });
+  }
 
   const client = new GitLabClient(auth);
   // enqueue ref so LoadProjects can schedule idle LoadPulse without a cycle
@@ -56,6 +125,11 @@ async function main() {
   };
   const unwire = wireSelectionEffects(stores, queue);
   const stopPoll = startPollTimer(stores, queue);
+
+  // Persist gitlabHost when we auto-bound (single host or restored pref)
+  if (!needPicker) {
+    void queue.enqueue({ kind: "SavePrefs", key: "prefs:save", band: "idle" });
+  }
 
   // Timers that must be cleared on graceful exit (keep event loop alive otherwise).
   let focusIv: ReturnType<typeof setInterval> | null = null;
@@ -87,14 +161,16 @@ async function main() {
     process.exit(code);
   };
 
-  // initial load
-  void queue.enqueue({ kind: "LoadProjects", key: "user:projects", band: "user" });
+  // FR-64: do not load projects until host is confirmed when picker required
+  if (!needPicker) {
+    void queue.enqueue({ kind: "LoadProjects", key: "user:projects", band: "user" });
+  }
 
   // focus project from CLI after projects load (poll briefly)
   const focusPath =
     args.project ?? (args.fromGit ? await projectFromGitRemote() : null);
 
-  if (focusPath) {
+  if (focusPath && !needPicker) {
     const tryFocus = () => {
       const items = stores.projects.get().items;
       if (items.length === 0) return false;
@@ -160,7 +236,12 @@ async function main() {
   // and was leaving the shell with Kitty CSI-u garbage and alt-screen residue.
 
   createRoot(renderer).render(
-    <App stores={stores} queue={queue} onQuit={() => shutdown.quit(0)} />,
+    <App
+      stores={stores}
+      queue={queue}
+      client={client}
+      onQuit={() => shutdown.quit(0)}
+    />,
   );
 }
 

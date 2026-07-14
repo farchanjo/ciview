@@ -11,7 +11,7 @@ export interface KeyBinding {
   category: KeyCategory;
 }
 
-/** Single source of truth for Help overlay + docs (feature 002). */
+/** Single source of truth for Help overlay + docs (feature 002 / 004). */
 export const KEY_BINDINGS: KeyBinding[] = [
   { key: "?", label: "Toggle Help", category: "General" },
   {
@@ -21,6 +21,11 @@ export const KEY_BINDINGS: KeyBinding[] = [
   },
   { key: "Tab", label: "Cycle focus zones", category: "General" },
   { key: "s [ ]", label: "Toggle / hide / show sidebar", category: "General" },
+  {
+    key: "H",
+    label: "Switch GitLab host (multi-host only; 1 host = skip)",
+    category: "General",
+  },
 
   { key: "j/k", label: "Move project cursor (no open)", category: "Projects" },
   { key: "Enter", label: "Open project → stage board", category: "Projects" },
@@ -50,7 +55,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export const STATUS_HINT =
-  "?:help  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m p  r R  q";
+  "?:help  H:host  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m p  r R  q";
 
 export function bindingsByCategory(): Map<KeyCategory, KeyBinding[]> {
   const map = new Map<KeyCategory, KeyBinding[]>();

@@ -5,6 +5,7 @@ import { openChildPipeline, openJobLog, openProject, popChildPipeline } from "./
 import type { JobQueue } from "../runtime/queue.ts";
 
 const basePrefs: Prefs = {
+  gitlabHost: null,
   pins: [],
   recentProjects: [],
   projectScope: "smart",

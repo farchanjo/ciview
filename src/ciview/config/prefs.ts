@@ -12,6 +12,11 @@ export interface Prefs {
   pollIntervalMs: number;
   live: boolean;
   sidebarVisible: boolean;
+  /**
+   * Last chosen glab GitLab hostname (e.g. git.eonf.ltd).
+   * When set and still valid, startup skips the host picker.
+   */
+  gitlabHost: string | null;
 }
 
 const DEFAULTS: Prefs = {
@@ -21,6 +26,7 @@ const DEFAULTS: Prefs = {
   pollIntervalMs: 3000,
   live: true,
   sidebarVisible: true,
+  gitlabHost: null,
 };
 
 function configDir(): string {
@@ -55,6 +61,10 @@ export async function loadPrefs(): Promise<Prefs> {
           : DEFAULTS.pollIntervalMs,
       live: data.live ?? DEFAULTS.live,
       sidebarVisible: data.sidebarVisible ?? DEFAULTS.sidebarVisible,
+      gitlabHost:
+        typeof data.gitlabHost === "string" && data.gitlabHost.trim()
+          ? data.gitlabHost.trim().replace(/^https?:\/\//, "").replace(/\/$/, "")
+          : null,
     };
   } catch {
     return { ...DEFAULTS, pins: [], recentProjects: [] };

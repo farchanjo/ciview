@@ -18,6 +18,7 @@ const basePrefs: Prefs = {
   pollIntervalMs: 3000,
   live: true,
   sidebarVisible: true,
+  gitlabHost: null,
 };
 
 describe("fmtDur / fmtAge (FR-03/32)", () => {
