@@ -7,21 +7,19 @@
 - GitLab personal access token with at least `read_api`
 - Optional: `glab` logged in (`glab auth status`)
 
-## Auth
-
-Option A — glab (preferred on this machine):
+## Auth (glab only)
 
 ```bash
+# 1) Install if needed
+brew install glab
+
+# 2) Authenticate
+glab auth login
 glab auth status
-# host e.g. git.eonf.ltd with token present
 ```
 
-Option B — env:
-
-```bash
-export GITLAB_HOST=https://git.eonf.ltd
-export GITLAB_TOKEN=glpat-...   # read_api sufficient for MVP
-```
+ciview refuses to start without glab + a logged-in host token. It prints
+numbered install / authenticate steps when something is missing.
 
 ## Run (once implemented)
 

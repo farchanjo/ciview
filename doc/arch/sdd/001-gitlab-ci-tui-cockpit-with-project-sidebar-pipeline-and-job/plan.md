@@ -2,24 +2,25 @@
 
 ## Overview
 
-Implement **ciview** MVP: a Bun + TypeScript + OpenTUI application that
-navigates GitLab CI via REST API v4 with a four-pane cockpit (projects,
-pipelines, stages/jobs, detail/log), glab/env auth, lazy loading, and smart
-live polling. Concurrency model is **async-first on Bun**: job **queue**, async
-**workers**, **store observers** for screen updates (ADR-0001, ADR-0002).
+Implement **ciview** MVP: Bun + **TypeScript** + OpenTUI **React** application
+that navigates GitLab CI via REST API v4 with a four-pane cockpit. Concurrency:
+**`p-queue` with concurrency 4**, user jobs always ahead of poll, store/RxJS
+observers for screen updates (ADR-0001, ADR-0002, ADR-0003).
 
 ## Goals
 
 - Runnable `ciview` (bun entry) against self-hosted or gitlab.com
 - Full keyboard navigation for the master–detail CI path
 - Read-only API usage; pins + preferences on disk; no PAT in ciview config
-- **Zero sync I/O on the UI path** — all GitLab/prefs work via queue workers
+- **Zero sync I/O on the UI path** — all GitLab/prefs work via `p-queue`
 
 ## Non-goals (this plan)
 
 - CI mutations, multi-host UI, web UI, full child-pipeline DAG editor
 - OS-level `Worker` threads / multi-process job runners (MVP)
 - External brokers (Redis, etc.)
+- Solid or non-React UI bindings
+- Home-grown queue implementation
 
 ## Technical Approach
 
@@ -27,146 +28,167 @@ live polling. Concurrency model is **async-first on Bun**: job **queue**, async
 
 | Piece | Choice |
 |-------|--------|
-| Runtime | **Bun** (async event loop) |
-| Language | TypeScript (strict) |
-| TUI | `@opentui/core` + Solid binding (`@opentui/solid`) if stable; fallback React binding |
+| Runtime | **Bun** |
+| Language | **TypeScript only** (strict) |
+| TUI | `@opentui/core` + **React** OpenTUI binding (ADR-0003) |
 | HTTP | Bun `fetch` inside **job handlers only** |
-| Concurrency | In-process async **queue** + **worker pool** + **observers** (ADR-0002) |
+| Queue | **`p-queue`**, **`concurrency: 4`** |
+| Priority | **user > poll > idle** (ADR-0002) |
+| Reactive | **RxJS** for store streams/subjects bridged into React observe |
 | Auth | env → glab config YAML parse |
 | Config | XDG `ciview` prefs (pins, pollIntervalMs) — via `SavePrefs` job |
-| Tests | `bun:test` for queue, handlers, map, auth; mock fetch |
+| Tests | `bun:test` for queue wiring, handlers, map, auth; mock fetch |
 
 ### Runtime architecture (authoritative)
 
 ```
-UI key/mouse  →  dispatch(intent)  →  enqueue(job)
-                                         │
-                              ┌──────────▼──────────┐
-                              │  Async job queue     │
-                              │  priority + coalesce │
-                              └──────────┬──────────┘
-                                         │
-                         async workers (Bun, same process)
-                                         │
-                              handler: gitlab/prefs I/O
-                                         │
-                              store.apply(result | error)
-                                         │
-                              notify observers → OpenTUI re-render
+UI keys (React) → dispatch(intent) → p-queue.add(job, { priority })
+                                              │
+                                     concurrency: 4
+                                              │
+                               handler: gitlab/prefs I/O
+                                              │
+                               store.apply(result | error)
+                                              │
+                    observers / RxJS → React OpenTUI re-render
 ```
 
 **Rules**
 
 1. UI never calls `gitlab.client` directly.
-2. Poll timer only enqueues `RefreshVisible` (or specific Load* jobs).
-3. Workers never import OpenTUI render APIs.
-4. Selection change bumps generation / aborts prior `AbortController`s.
+2. Poll timer enqueues `RefreshVisible` at **poll** priority when live + project
+   open (FR-08b: always refresh pipeline strip so new pipelines appear while
+   idle; never auto-switch selection on silent load).
+3. User selection/manual refresh enqueues at **user** priority (always ahead).
+4. Handlers never import OpenTUI/React render APIs.
+5. Selection change bumps generation / aborts prior `AbortController`s.
 
 ### Package layout
 
 ```
-src/
+src/ciview/                  # implementation root (codeRoot)
   main.ts
   cli/args.ts
   auth/resolve.ts
-  gitlab/
-    client.ts              # used only from job handlers
-    types.ts
-    map.ts
-  runtime/
-    queue.ts               # enqueue, coalesce, priorities
-    worker-pool.ts         # N async consumers
-    jobs.ts                # job kinds + payloads
-    handlers/
-      load-projects.ts
-      load-pipelines.ts
-      load-jobs.ts
-      load-trace.ts
-      refresh-visible.ts
-      save-prefs.ts
-  state/
-    store.ts               # state + subscribe/notify observers
-    selectors.ts           # pane slices
-  poll/timer.ts            # setInterval → enqueue only
+  gitlab/{client,types,map}.ts
+  runtime/{queue,priorities,jobs,handlers,effects}.ts
+  state/{createStore,root}.ts
+  poll/timer.ts
   config/prefs.ts
   git/remote.ts
-  ui/
-    app.tsx                # observes store
-    panes/...
-    chrome/StatusBar.tsx
-    keys.ts                # maps keys → intents (dispatch)
-    statusGlyph.ts
-  util/openUrl.ts
-  util/sanitizeTrace.ts
+  ui/{App,keys,HelpOverlay}.tsx
+  ui/panes/*  ui/chrome/*  ui/hooks/*
+  util/*
+```
+
+### Dependencies (planned)
+
+```text
+p-queue
+rxjs
+react
+@opentui/core
+@opentui/react          # exact package name verified at T003
 ```
 
 ### Architecture layers
 
-1. **UI** — OpenTUI; keys → intents; observes store
-2. **Dispatch** — intent → job enqueue (and local pure UI state if any)
-3. **Queue + workers** — Bun async pool; cancellation; coalesce
+1. **UI (React)** — keys → intents; hooks observe store/RxJS
+2. **Dispatch** — intent → `queue.add` with priority band
+3. **p-queue** — concurrency 4; coalesce helpers around add
 4. **Handlers** — GitLab client / prefs; return domain results
 5. **Store + observers** — single source of truth; screen updates
 
 Dependency rule:
 
 `ui → dispatch/store`  
-`workers/handlers → gitlab/auth/config/store.apply`  
+`handlers → gitlab/auth/config/store.apply`  
 `ui` must not import `gitlab/client`  
 `handlers` must not import `ui/**`
 
 ### Data flow
 
 ```
-launch → resolve auth (sync OK: local files) → start workers → enqueue LoadProjects
-user selects project → enqueue LoadPipelines (high) + abort prior pipeline/job jobs
-user selects pipeline → enqueue LoadJobs
-user selects job → enqueue LoadTrace
-poll tick (if live + active) → enqueue RefreshVisible (normal)
-handler done → store.apply → observers → panes update
+launch → resolve auth → start p-queue → enqueue LoadProjects (user)
+user selects project → enqueue LoadPipelines (user) + abort prior gens
+user selects pipeline → enqueue LoadJobs (user)
+user selects job → enqueue LoadTrace (user)
+poll tick (live + project open) → enqueue RefreshVisible (poll)
+  · silent LoadPipelines (new pipelines; keep selection)
+  · silent LoadJobs for selected pipeline
+  · silent LoadTrace only if log open + job active
+handler done → store.apply → RxJS/observers → React panes update
 ```
 
 ### Job table
 
 | Kind | Payload key | Priority | Cancels with |
 |------|-------------|----------|--------------|
-| LoadProjects | host | high | session end |
-| LoadPipelines | projectId | high (user) / normal (poll) | project selection gen |
-| LoadJobs | pipelineId | high / normal | pipeline selection gen |
-| LoadTrace | jobId | high / normal | job selection gen |
-| LoadPulse | projectId | low | optional |
-| RefreshVisible | selection snapshot | normal | superseded by newer refresh |
-| SavePrefs | prefs blob | low | coalesce to latest |
+| LoadProjects | host | user | session end |
+| LoadPipelines | projectId | user or poll | project selection gen |
+| LoadJobs | pipelineId | user or poll | pipeline selection gen |
+| LoadTrace | jobId | user or poll | job selection gen |
+| LoadPulse | projectId | poll/idle | optional |
+| RefreshVisible | selection snapshot | poll | superseded by newer refresh |
+| SavePrefs | prefs blob | idle | coalesce to latest |
 
 ### Keyboard map (MVP)
 
+Normative full table: **`keybindings.md`**. Summary:
+
 | Key | Action |
 |-----|--------|
-| Tab / S-Tab | next/prev pane |
-| h / l | pane left/right |
-| j / k | move in pane |
-| Enter | drill (enqueue LoadPipelines / LoadJobs / LoadTrace for the new focus) |
-| Esc | focus left / collapse |
-| / | filter active pane (local state) |
-| r | enqueue refresh for focused resource |
-| R | toggle live poll (store + timer) |
-| o | open web_url (async spawn OK; not GitLab REST) |
-| p | pin/unpin → enqueue SavePrefs |
-| q | quit (drain/stop workers) |
+| `?` | Toggle **Help** overlay (cheatsheet from binding table) |
+| `s` / `[` / `]` | Toggle / hide / show **sidebar** |
+| Tab / S-Tab | next/prev pane (skip hidden sidebar) |
+| `1`–`4` | focus projects / pipelines / jobs / detail |
+| `H` / `L` | pane left / right |
+| `j` / `k` | move in pane |
+| Enter | drill (enqueue Load* at **user** priority) |
+| Esc | close Help, or clear filter, or focus left |
+| `/` | filter focused pane (letters disabled while typing) |
+| `r` / `R` | refresh (**user**) / toggle live poll |
+| `o` | open web_url |
+| `p` | pin/unpin → SavePrefs (**idle**) |
+| `f` | toggle log follow |
+| `q` | quit gracefully (disabled while Help open; use Esc/`?` first) |
+| `Ctrl-c` / SIGINT / SIGTERM / … | same graceful path (FR-27); **not** SIGKILL |
+
+Status bar always shows compact hints including `?:help`.
+
+### Graceful shutdown (FR-27)
+
+Normative flow: **`shutdown-flow.md`**.
+
+Single-flight order (must not reorder):
+
+1. cleanup (poll, queue, effects, focus timers)
+2. `renderer.destroy()` to completion (OpenTUI native restore)
+3. `restoreTerminalTty()` (alt screen + Kitty CSI-u + cursor + raw off)
+4. `process.exit(0)`
+
+Wire-up rules in `main.tsx`:
+
+- `onDestroy` → `afterRendererDestroyed` (only safe post-destroy exit hook)
+- **never** `process.exit` on the mid-cycle `"destroy"` event
+- `q` / process signals → `shutdown.quit`
+
+Modules: `runtime/shutdown.ts`, `runtime/terminalRestore.ts`. Prefer
+`SIGTERM` over `SIGKILL` for remote stop.
 
 ### Error handling
 
-- Auth fail at bootstrap → message + exit 2 (before workers usefully run)
-- Job failure → `store.apply` error banner for that pane; last good data kept
-- Abort/stale → silent drop (no error flash)
-- Network → banner + next poll enqueues retry
+- Auth fail at bootstrap → message + exit 2
+- Job failure → store error banner; last good data kept
+- Abort/stale → silent drop
+- Network → banner + next poll enqueues retry at poll priority
 
 ### Testing strategy
 
-1. Queue: coalesce, priority order, abort drops apply
-2. Handlers: mock `fetch`, map to store patches
-3. Auth resolve fixtures
-4. sanitizeTrace / stage grouping pure tests
+1. p-queue wiring: concurrency ≤ 4; user priority before poll
+2. Coalesce + abort drops stale apply
+3. Handlers with mock `fetch`
+4. Auth fixtures; sanitizeTrace; stage grouping
 5. Poll timer enqueues only when live+active
 6. Manual smoke on real GitLab
 
@@ -185,34 +207,37 @@ handler done → store.apply → observers → panes update
 
 ### Implementation phases
 
-1. Scaffold Bun package
-2. Store + observers (no network)
-3. Queue + worker pool + job types (echo/fake handlers)
-4. Auth + GitLab client + real handlers
-5. Poll timer → enqueue
-6. OpenTUI panes observing store + key dispatch
+1. Scaffold Bun + TypeScript package; pin `p-queue`, `rxjs`, React, OpenTUI React
+2. **Store map** slices + selectors/RxJS (no network) — interactive shell can render empty panes
+3. `p-queue` concurrency 4 + priorities + fake handlers applying to slices
+4. `effects.ts` selection → enqueue; poll timer → enqueue
+5. Auth + GitLab client + real handlers
+6. React OpenTUI panes bound 1:1 to store map + key dispatch (realtime CLI)
 7. CLI focus modes, polish, tests, smoke
 8. `speckit validate` green
+
+Companion: `store-map.md` is normative for slice boundaries.
 
 ### Risks
 
 | Risk | Mitigation |
 |------|------------|
-| Queue over-engineering | Keep ~100–200 LOC queue; no external broker |
-| OpenTUI churn | Isolate `src/ui/**` |
-| Huge traces | Tail in LoadTrace handler; store only window |
-| Forgotten direct fetch in UI | Lint/convention: client only under handlers |
-| OS Worker confusion | Document: “worker” = async consumer, not `new Worker` |
+| OpenTUI React package name/API churn | Isolate `src/ui/**`; pin versions at T003 |
+| RxJS overuse | Use for clear streams (selection, pane data, errors); avoid ceremony |
+| Rate limits at concurrency 4 | Coalesce + backoff on 429; user priority still wins |
+| Forgotten direct fetch in UI | Convention + review: client only under handlers |
 
 ## Companion Artifacts
 
-- ADR-0002 async runtime
+- ADR-0002 (`p-queue`, 4, priorities), ADR-0003 (React)
 - `data-model.md`, `quickstart.md`
 - Gherkin + CUE under `doc/arch/`
 
 ## Success criteria
 
-- FR-01…FR-19 implemented or explicitly deferred in tasks
-- No UI path performs GitLab HTTP outside the queue
+- FR-01…FR-19 (incl. 17b) implemented or explicitly deferred in tasks
+- No UI path performs GitLab HTTP outside `p-queue`
+- Measured concurrency never exceeds 4 running jobs
+- User-priority job starts before queued poll jobs when both pending
 - Manual smoke: project → pipeline → job → log with live poll
 - `speckit validate` = 0 findings before commit

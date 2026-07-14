@@ -1,81 +1,173 @@
 # ciview — Agent Context
 
-Canonical, machine-readable map of this repository for AI agents and
-automation. Keep this file dense, factual, and path-anchored; prefer exact
-paths over prose.
-
-Prune as you go: when the code moves on, refresh what drifted and delete dead
-sections and stale path references — keep this file lean, do not only append to
-it.
+Canonical machine-readable map. Path-anchored. Prune on drift.
 
 ## Project
 
-**ciview** is a terminal CI cockpit for GitLab: multi-pane OpenTUI navigator for
-projects → pipelines → stages/jobs → logs. Stack: **Bun**, **TypeScript**,
-**OpenTUI**, GitLab REST API v4. Auth reuses **glab** config / `GITLAB_*` env.
-
-Spec-driven with **speckit**. Source of truth: `doc/arch`. Code follows specs.
+ciview: GitLab CI TUI (sidebar, stage board, on-demand log). Bun + TypeScript + OpenTUI React + p-queue (4) + RxJS. Auth glab-only. Corpus doc/arch. Code src/ciview.
 
 ## Architecture
 
+doc/arch: memory, functional, domain/cli-surface, operations, slo, adr, schemas, specs/features, sdd, observability, quality, threat-model, runbooks, speckit.toml.
+
+src/ciview layers: auth, cli, config, git, gitlab, nav, poll, projects, runtime, state, ui, util.
+
+Key modules: src/ciview/main.tsx, src/ciview/nav/openProject.ts, src/ciview/ui/panes/PipelineGraph.tsx, src/ciview/ui/panes/JobLogDrawer.tsx, src/ciview/runtime/queue.ts, src/ciview/auth/resolve.ts.
+
+## Build & release (local only — NO GitHub Actions CI)
+
+GitHub Actions is **disabled** (see `.github/CI_DISABLED.md`). Never add
+`on: push` CI that builds this repo unless explicitly re-enabled.
+
+| Target | What |
+|--------|------|
+| `make build` / `make deploy` | Local host binary + optional `/usr/local/bin` |
+| `make build-darwin` | macOS artifact → `dist/release/ciview-darwin-*` |
+| `make build-linux` | Linux x64 via **SSH** `root@vm.services` (native OpenTUI) |
+| `make release-binaries` | darwin + linux + `SHA256SUMS` |
+| `make release` | tag `VERSION` + `gh release` upload **local** assets |
+
 ```
-doc/arch/
-├── memory/constitution.md    # product principles (CI-only, Bun+OpenTUI, …)
-├── functional/               # product overview and flows
-├── adr/                      # MADR architecture decision records
-├── schemas/                  # CUE schemas (as added)
-├── specs/features/           # Gherkin feature specifications
-├── architecture/             # C4 / Structurizr (as added)
-├── sdd/                      # per-feature working dirs (NNN-slug)
-├── observability/
-├── quality/
-├── threat-model/
-├── runbooks/
-└── speckit.toml              # guard + project config
+# Linux builder (default)
+export SSH_TARGET=root@vm.services   # or SSH_HOST=vm.services SSH_USER=root
+
+make check
+make release-binaries
+make release VERSION=v0.1.0
 ```
 
-Implementation (when present): `src/**` (Bun/TS + OpenTUI). User preferences
-(pins, poll interval; not secrets) persist under the operator XDG config home
-in an application-private file (see feature plan prefs module). Secrets come
-from process environment or the operator glab CLI configuration — never from
-the git tree.
+Do **not** use `bun build --target=bun-linux-*` on macOS for OpenTUI (missing
+native optional packages). Always compile Linux on the SSH host.
 
 ## Commands
 
 ```
-bun install           # install deps
-bun run check         # typecheck + tests (once package scripts exist)
-bun run build         # build distributable
-bun run start         # run TUI (once entry exists)
-speckit status        # active feature + phase
-speckit next          # recommended next command
-speckit validate      # validate doc/arch corpus (must be 0 findings before commit)
-speckit verify        # Gherkin corpus against binary when present
+bun install
+bun run start
+bun test
+bun run typecheck
+bun run check
+bun run build
+make build-darwin
+make build-linux
+make release-binaries
+make release
+speckit init
+speckit constitution
+speckit specify
+speckit clarify
+speckit plan
+speckit plan setup
+speckit tasks
+speckit tasks setup
+speckit analyze
+speckit implement
+speckit feature list
+speckit feature select
+speckit feature new
+speckit feature renumber
+speckit feature reorder
+speckit feature insert
+speckit feature compact
+speckit feature archive
+speckit feature restore
+speckit status
+speckit next
+speckit validate
+speckit verify
+speckit explain
+speckit search
+speckit reindex
+speckit reindex --deep
+speckit check
+speckit on
+speckit off
+speckit guard check
+speckit guard hook
+speckit config list
+speckit config get
+speckit config set
+speckit config unset
+speckit config drift
+speckit context score
+speckit context pack
+speckit spec score
+speckit semantic status
+speckit semantic deep-status
+speckit semantic enable
+speckit semantic off
+speckit semantic eval
+speckit dedupe
+speckit missing
+speckit brief
+speckit ask
+speckit dismiss
+speckit commit check
+speckit commit suggest
+speckit license list
+speckit license show
+speckit license set
+speckit license check
+speckit version
+speckit completions
+speckit guide
+speckit manual
+speckit diagram render
+speckit workflow render
+speckit mermaid render
+speckit stats findings
+speckit stats guard
+speckit stats profile
+speckit stats attributes
+speckit stats compliance
+speckit stats corpus
+speckit stats recommendations
+speckit model list
+speckit model add
+speckit model fetch
+speckit model select
+speckit model check
+speckit model remove
+speckit model api
+speckit pack list
+speckit pack add
+speckit pack update
+speckit pack remove
+speckit pack export
+speckit pack import
+speckit library list
+speckit library add
+speckit library validate
+speckit library show
+speckit library update
+speckit library remove
+speckit library ask
+speckit library search
+speckit library open
+speckit library browse
+speckit library extract
+speckit library export
+speckit library import
+speckit library serve
+speckit gitlab status
+speckit gitlab sync
+speckit migrate
+speckit hook session-start
+speckit hook user-prompt
+speckit hook post-edit
+speckit hook pre-commit
 ```
+
+Product exit code: 0 ok, 1 error, 2 auth. Speckit supports --json on management commands.
+Config families: project git guard context dedupe adr stats semantic gitlab hygiene compliance workflow privacy.
 
 ## Conventions
 
-- Guard (`[guard]` in `doc/arch/speckit.toml`) limits writes; never bypass with
-  `--allow-out-of-spec` to force product code — fix scope or plan.
-- Workflow: constitution → specify → clarify → plan → tasks → analyze →
-  implement → validate.
-- English for committed specs and agent maps.
-- CI-only product surface; MVP is read-mostly (no retry/cancel until specified).
-- Lazy GitLab API loads; poll fast only while pipelines/jobs are active.
-- **Async runtime (Bun, ADR-0002):** queue + async workers + store observers.
-  UI dispatches intents only; GitLab HTTP lives in job handlers; no OS `Worker`
-  threads in MVP.
+- Spec-first protocol: run speckit status then speckit next; validate and verify green before commit.
+- Guard in doc/arch/speckit.toml; never edit doc/.specify by hand.
+- Cursor keys do not open projects; Enter opens. Silent poll. CI-only product.
+- Angular Conventional Commits; no AI co-author trailers.
 
 ## Spec-first protocol
 
-- Before work: `speckit status` then `speckit next`; do that step only.
-- `speckit validate` green before every commit.
-- Source of truth: `doc/arch` — spec > code > assumption.
-- Never edit `doc/.specify/*` databases by hand.
-- Red validate → fix the artifact, never the rule.
-
-### Git workflow
-
-- Angular Conventional Commits: `<type>(<scope>): <subject>` (header ≤72 chars).
-- Never bypass speckit gates to force a commit.
-- Never add AI attribution trailers or “generated with” notices to commits/docs.
+spec-first: doc/arch is the source of truth — run `speckit status` then `speckit next` and read the spec before writing any code.

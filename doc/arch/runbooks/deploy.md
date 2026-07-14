@@ -1,52 +1,83 @@
 # Deploy Runbook — ciview
 
-Operational procedure to build, validate, and ship ciview from a clean checkout.
-ciview is a **local Bun CLI/TUI**; “deploy” means release a versioned binary or
-package consumers can install, not a long-running server fleet.
+Operational procedure to build a **standalone Mach-O binary**, Apple-codesign
+it, and install into `/usr/local/bin` with `sudo`. ciview is a local Bun
+CLI/TUI — not a multi-node fleet.
 
 ## Purpose
 
-Build, test, validate specs, and publish a release artifact (npm/Bun package
-and/or compiled binary when configured).
+1. Compile a single-file executable (`bun build --compile`).
+2. Sign with **Apple `codesign`** (ad-hoc or Developer ID).
+3. Install to **`/usr/local/bin/ciview`** via `sudo`.
 
 ## Trigger
 
-- A release tag is requested.
-- Main branch has merged approved feature work ready to ship.
+- Workstation install / upgrade of the local `ciview` binary.
+- A release tag is requested and the binary must be rebuilt.
 
 ## Preconditions
 
-- Clean working tree on the intended release commit.
-- Tooling available: `bun`, `git`, `speckit`; network access to the package
-  registry when `bun install` must fetch dependencies.
-- No secrets in the tree (`speckit validate` / manual review of `.env`).
+- macOS with `bun`, `codesign`, `sudo`, `make`.
+- Clean enough tree; `bun install` already run.
+- Optional: Apple Developer identity for non-ad-hoc signing:
+  `security find-identity -v -p codesigning`
 
 ## Steps
 
-1. Sync: `git fetch --all` and check out the release commit.
-2. Spec gate: `speckit validate` — must exit `0`.
-3. Install: `bun install`.
-4. Typecheck/tests: `bun run check` (or project-equivalent from Makefile/package.json).
-5. Build: `bun run build` producing the distributable entrypoint.
-6. Optional: tag `vX.Y.Z` and push tag per release policy.
-7. Publish artifact only after steps 2–5 succeed.
+### A — Local workstation install (macOS)
+
+1. Ensure tooling: `bun`, `make`, `codesign`, `sudo` on PATH; run `bun install`.
+2. Optional quality gate: `make check` (tests + typecheck + lint + `speckit validate`).
+3. Compile the standalone binary: `make build` → `dist/ciview`.
+4. Apple-codesign the binary: `make sign` (default identity ad-hoc `-`).
+5. Install with sudo and re-sign the installed path: `make install`
+   (copies to `/usr/local/bin/ciview`).
+6. Or run the combined path: `make deploy` (build + sign + install).
+7. Optional Developer ID:  
+   `make deploy CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"`.  
+   Default ad-hoc is enough for the same machine; shipping outside your Mac
+   needs Developer ID (+ notarization, out of scope here).
+8. Uninstall when needed: `make uninstall` (`sudo rm /usr/local/bin/ciview`).
+
+### B — Multi-arch GitHub Release (no GitHub Actions CI)
+
+**GitHub Actions is disabled** (`.github/CI_DISABLED.md`). Never compile in GHA.
+
+1. `make check` on the developer Mac.
+2. `make release-binaries` which:
+   - builds **darwin** locally (`make build-darwin`);
+   - rsyncs sources to **`root@vm.services`** and builds **linux-x64** natively
+     (`make build-linux` — required for OpenTUI native packages);
+   - writes `dist/release/SHA256SUMS`.
+3. `make release VERSION=vX.Y.Z` which tags, pushes, and runs
+   `gh release create` uploading **only local** artifacts from `dist/release/`.
+4. Confirm release assets on GitHub; do not attach CI-built binaries.
 
 ## Verification
 
-- `speckit validate` exits `0`.
-- `bun run check` (tests + types) passes.
-- Running the built `ciview --help` (or `bun run start -- --help`) shows CLI help.
-- Auth smoke (optional, private): against a test project, list pipelines succeeds.
+| Check | Command |
+|-------|---------|
+| Binary exists | `test -x /usr/local/bin/ciview` |
+| Help works | `ciview -h` |
+| Signature | `codesign -dv /usr/local/bin/ciview` |
+| Spec / tests | `make check` |
 
 ## Rollback
 
-1. Stop publishing; do not overwrite a bad latest tag without a new version.
-2. Check out previous known-good tag.
-3. Re-run `speckit validate` and `bun run check`.
-4. Record failure and open a follow-up issue/feature before the next attempt.
+1. `make uninstall` or restore previous binary.
+2. Check out known-good commit; `make deploy` again.
+3. Record failure before the next attempt.
 
 ## Incident: bad token / auth outage
 
-1. Confirm `glab auth status` or `GITLAB_TOKEN` / host env.
-2. Prefer rotating to a **read_api** (or minimal) token for view-only use.
-3. Restart ciview; do not paste tokens into issues or commits.
+1. Confirm `glab auth status` (ciview is glab-only for credentials).
+2. Prefer a minimal read token in glab; do not paste tokens into issues.
+3. Restart `ciview` after auth is fixed.
+
+## Incident: Gatekeeper / codesign
+
+1. Prefer re-sign: `make sign install`.
+2. Ad-hoc binary is intended for the build machine; do not distribute ad-hoc
+   builds as “official” releases.
+3. After a forced `kill -9` of a running TUI, run `reset` if the tty is dirty
+   (unrelated to install; see FR-27).

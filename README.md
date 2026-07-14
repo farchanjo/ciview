@@ -9,8 +9,8 @@
 for **projects → pipelines → jobs → logs**. Think of it as a turbinated
 `glab ci` / pipeline view — keyboard-first, live while builds run, **CI only**.
 
-> Status: **spec complete, implementation not started yet.**  
-> Architecture and tasks live under [`doc/arch/`](doc/arch/).
+> Status: **MVP implemented** under [`src/ciview/`](src/ciview/).  
+> Specs and ADRs live under [`doc/arch/`](doc/arch/).
 
 ## :books: Index
 
@@ -19,8 +19,9 @@ for **projects → pipelines → jobs → logs**. Think of it as a turbinated
 - [Architecture](#architecture)
 - [Stack](#stack)
 - [Repository layout](#repository-layout)
-- [Getting started (specs)](#getting-started-specs)
-- [Auth (planned)](#auth-planned)
+- [Run](#run)
+- [Specs](#specs)
+- [Auth](#auth-planned)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 
@@ -36,10 +37,13 @@ pages and CLI subcommands. **ciview** keeps you in the terminal with:
 
 ## :sparkles: Features (planned MVP)
 
-- Multi-pane cockpit: projects | pipelines | stages/jobs | detail/log
-- Keyboard navigation (vim-ish: j/k, h/l, Enter, Esc)
+- **Project sidebar** (smart/pinned/all, filter) — `j/k` cursor only, **Enter opens**
+- **Pipeline stage board** on the right (strip + columns per stage)
+- **Job log on demand** (Enter on job; Esc closes)
+- **Shortcut-first** UX with in-app **Help (`?`)**
+- See feature 002: [`ux-layout.md`](doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md)
 - Read-only GitLab REST API v4 (no retry/cancel in MVP)
-- Auth from `GITLAB_TOKEN` / host env **or** existing [glab](https://gitlab.com/gitlab-org/cli) config
+- Auth **only via [glab](https://gitlab.com/gitlab-org/cli)** (install + `glab auth login` if missing)
 - Focus modes: dashboard, current git remote (`.`), `group/project` path
 - Open focused pipeline/job in the browser
 
@@ -49,41 +53,96 @@ Out of scope for MVP: issues, MR editing, source browser, registry, runner admin
 
 Async-first on **Bun** ([ADR-0002](doc/arch/adr/0002-async-workers-queue-observer-bun.md)):
 
-```text
-UI keys  →  enqueue(job)  →  async worker pool  →  store.apply
-                                                      ↓
-                                              observers → redraw TUI
+```mermaid
+flowchart LR
+  UI[React OpenTUI keys] --> D[dispatch intent]
+  D --> Q["p-queue concurrency 4"]
+  Q --> H[job handlers fetch]
+  H --> S[store.apply]
+  S --> O[RxJS observers]
+  O --> UI
 ```
 
-- **Queue** — all GitLab HTTP and prefs I/O are jobs  
-- **Workers** — concurrent async consumers on Bun’s event loop (not OS threads in MVP)  
-- **Observers** — TUI only reacts to store changes; handlers never paint  
+```text
+UI keys (React)  →  p-queue.add(job)  →  up to 4 concurrent handlers  →  store.apply
+                                                                            ↓
+                                                              RxJS/observers → redraw
+```
+
+- **Interactive realtime CLI** — long-lived TUI; keys always live; screen follows stores
+- **Store map** — session, prefs, projects, pipelines, jobs, trace, selection, uiChrome ([`store-map.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/store-map.md))
+- **Queue** — [`p-queue`](https://github.com/sindresorhus/p-queue), **concurrency 4**
+- **Priority** — **user jobs always ahead of poll**
+- **Observers** — React TUI reacts to store / **RxJS**; handlers never paint
+- **No OS Worker threads** in MVP (async slots on Bun’s event loop only)
 
 ## :wrench: Stack
 
 | Layer | Choice |
 |-------|--------|
 | Runtime | [Bun](https://bun.sh) |
-| Language | TypeScript |
-| TUI | [OpenTUI](https://opentui.com) |
+| Language | TypeScript only |
+| TUI | [OpenTUI](https://opentui.com) + **React** |
+| Queue | `p-queue` (concurrency 4) |
+| Reactive | RxJS (allowed / preferred for streams) |
 | API | GitLab REST v4 |
-| Auth | env or glab config |
+| Auth | glab only |
 | Specs | [speckit](https://github.com/) / `doc/arch` |
 
 ## :file_folder: Repository layout
 
 ```text
 doc/arch/           # source of truth (constitution, specs, ADRs, tasks)
-  memory/           # constitution
-  sdd/001-…/        # feature spec, plan, tasks
-  adr/              # architecture decisions
-  specs/features/   # Gherkin
-src/                # implementation (not started)
+src/ciview/         # Bun + OpenTUI React implementation
+  main.tsx          # entry
+  runtime/          # p-queue, handlers, effects
+  state/            # store map
+  ui/               # React panes + Help overlay
+  gitlab/ auth/ …
 ```
 
-## :hammer_and_wrench: Getting started (specs)
+## :hammer_and_wrench: Run
 
-This repo is **spec-driven**. Before code:
+```bash
+bun install
+bun run start              # interactive TUI
+bun run src/ciview/main.tsx .
+bun run src/ciview/main.tsx group/project
+bun test && bun run typecheck
+make deploy                # local binary → /usr/local/bin (macOS codesign)
+```
+
+Auth is **glab only**. If glab is missing or not logged in, ciview prints:
+
+```text
+1) Install glab:   brew install glab
+2) Authenticate:   glab auth login && glab auth status
+```
+
+In the TUI: press **`?`** for the shortcut help overlay.
+
+## :package: Release binaries (local only — no GitHub Actions)
+
+**CI on GitHub is disabled.** Binaries are compiled on the developer machine
+and on a Linux SSH builder, then uploaded with `gh release`.
+
+| Artifact | Builder |
+|----------|---------|
+| `ciview-darwin-arm64` (or x64) | This Mac (`make build-darwin`) |
+| `ciview-linux-x64` | `ssh root@vm.services` (`make build-linux`) |
+
+```bash
+make check
+make release-binaries          # darwin + linux + SHA256SUMS → dist/release/
+make release VERSION=v0.1.0    # git tag + gh release with local assets
+```
+
+Defaults: `SSH_TARGET=root@vm.services`. Override if needed.
+See [`.github/CI_DISABLED.md`](.github/CI_DISABLED.md) and the Makefile.
+
+## Specs
+
+This repo is **spec-driven**:
 
 ```bash
 speckit status
@@ -91,8 +150,7 @@ speckit next
 speckit validate   # must be 0 findings before commits that touch the corpus
 ```
 
-Feature **001** is specified → clarified → planned → tasked → analyzed.
-Next lifecycle step: **`speckit implement`** (see tasks T001+).
+Feature **001** is implemented under `src/ciview/`.
 
 Key docs:
 
@@ -105,17 +163,24 @@ Key docs:
 | Tasks | [`doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/tasks.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/tasks.md) |
 | ADR Bun+OpenTUI | [`doc/arch/adr/0001-….md`](doc/arch/adr/0001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job.md) |
 | ADR async runtime | [`doc/arch/adr/0002-async-workers-queue-observer-bun.md`](doc/arch/adr/0002-async-workers-queue-observer-bun.md) |
+| ADR React UI | [`doc/arch/adr/0003-react-opentui-typescript-stack.md`](doc/arch/adr/0003-react-opentui-typescript-stack.md) |
 
-## :key: Auth (planned)
+## :key: Auth (glab only)
 
 ```bash
-# Option A — glab
-glab auth status
+# 1) Install (if needed)
+brew install glab
 
-# Option B — environment
-export GITLAB_HOST=https://gitlab.example.com
-export GITLAB_TOKEN=glpat-...   # read_api is enough for MVP
+# 2) Authenticate
+glab auth login
+# self-hosted:
+# glab auth login --hostname git.example.com
+
+glab auth status
 ```
+
+ciview never asks you to paste a PAT into env for normal use — it reads the
+token glab already stored.
 
 ## :open_book: Documentation
 

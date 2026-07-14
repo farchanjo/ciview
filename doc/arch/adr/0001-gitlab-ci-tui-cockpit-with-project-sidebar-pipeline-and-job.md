@@ -38,6 +38,9 @@ desired stack, enables a reactive multi-pane cockpit, and talks to the same API
 already validated against the target self-hosted GitLab. Auth bootstraps from
 glab/env rather than re-implementing login.
 
+UI binding is fixed to **React + TypeScript** (see ADR-0003). Async I/O uses
+**`p-queue` concurrency 4** with user priority over poll (see ADR-0002).
+
 ### Consequences
 
 - Good: Single language (TS) for UI and API; OpenTUI suited to frequent redraws;

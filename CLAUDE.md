@@ -1,75 +1,151 @@
-# ciview — Claude Code Guide
+# CLAUDE.md — Claude Code notes
 
-Guidance for Claude Code (claude.ai/code) when working in this repository.
-`AGENTS.md` is the canonical, tool-agnostic project map; this file adds
-Claude-specific notes. When the two overlap, `AGENTS.md` wins.
-
-Prune as you go: when the code moves on, refresh what drifted and delete dead
-sections and stale path references — keep this file lean, do not only append to
-it.
+Companion to AGENTS.md (canonical project map is AGENTS.md).
 
 ## Project
 
-ciview is a spec-driven project managed with speckit. Treat the spec
-corpus under `doc/arch` as the source of truth: read it before editing code,
-and change the specs first whenever behavior must change.
+Claude Code working notes for ciview. Local GitLab CI cockpit. Stack Bun OpenTUI React TypeScript. Auth via glab (exit code 2 if missing).
 
 ## Architecture
 
-Authoritative layout (see `AGENTS.md` for the annotated tree):
+Paths: doc/arch/memory/constitution.md; doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/; doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/; src/ciview layers auth, cli, config, git, gitlab, nav, poll, projects, runtime, state, ui, util.
 
-```
-doc/arch/
-├── adr/              # decision records — read these first
-├── schemas/          # CUE schemas
-├── specs/features/   # Gherkin behavior specs
-├── architecture/     # C4 model + diagrams
-└── sdd/              # active-feature working dirs (NNN-slug)
-```
+## Build & release (local only)
+
+**Do not enable GitHub Actions CI.** Builds are local:
+
+- macOS: `make build-darwin` on the developer Mac
+- Linux x64: `make build-linux` over SSH (`root@vm.services` by default)
+- Release: `make release-binaries` then `make release` (gh upload of local files)
+
+See AGENTS.md and `.github/CI_DISABLED.md`.
 
 ## Commands
 
 ```
-speckit status      # active feature + current workflow phase
-speckit next        # the recommended next command
-speckit validate    # validate the doc/arch corpus before committing
-<build-command>     # project build — fill in the real command
-<test-command>      # project tests — fill in the real command
+bun install
+bun run start
+bun test
+bun run typecheck
+bun run check
+bun run build
+make build-darwin
+make build-linux
+make release-binaries
+make release
+speckit init
+speckit constitution
+speckit specify
+speckit clarify
+speckit plan
+speckit plan setup
+speckit tasks
+speckit tasks setup
+speckit analyze
+speckit implement
+speckit feature list
+speckit feature select
+speckit feature new
+speckit feature renumber
+speckit feature reorder
+speckit feature insert
+speckit feature compact
+speckit feature archive
+speckit feature restore
+speckit status
+speckit next
+speckit validate
+speckit verify
+speckit explain
+speckit search
+speckit reindex
+speckit reindex --deep
+speckit check
+speckit on
+speckit off
+speckit guard check
+speckit guard hook
+speckit config list
+speckit config get
+speckit config set
+speckit config unset
+speckit config drift
+speckit context score
+speckit context pack
+speckit spec score
+speckit semantic status
+speckit semantic deep-status
+speckit semantic enable
+speckit semantic off
+speckit semantic eval
+speckit dedupe
+speckit missing
+speckit brief
+speckit ask
+speckit dismiss
+speckit commit check
+speckit commit suggest
+speckit license list
+speckit license show
+speckit license set
+speckit license check
+speckit version
+speckit completions
+speckit guide
+speckit manual
+speckit diagram render
+speckit workflow render
+speckit mermaid render
+speckit stats findings
+speckit stats guard
+speckit stats profile
+speckit stats attributes
+speckit stats compliance
+speckit stats corpus
+speckit stats recommendations
+speckit model list
+speckit model add
+speckit model fetch
+speckit model select
+speckit model check
+speckit model remove
+speckit model api
+speckit pack list
+speckit pack add
+speckit pack update
+speckit pack remove
+speckit pack export
+speckit pack import
+speckit library list
+speckit library add
+speckit library validate
+speckit library show
+speckit library update
+speckit library remove
+speckit library ask
+speckit library search
+speckit library open
+speckit library browse
+speckit library extract
+speckit library export
+speckit library import
+speckit library serve
+speckit gitlab status
+speckit gitlab sync
+speckit migrate
+speckit hook session-start
+speckit hook user-prompt
+speckit hook post-edit
+speckit hook pre-commit
 ```
+
+Product exit code: 0 ok, 1 error, 2 auth. Speckit supports --json on management commands.
+Config families: project git guard context dedupe adr stats semantic gitlab hygiene compliance workflow privacy.
 
 ## Conventions
 
-- Respect the guard policy (`[guard]` in `doc/arch/speckit.toml`). If a write is
-  denied, the target is outside the active spec scope — do not disable the
-  guard; adjust the scope or revise the plan.
-- Follow the spec-driven workflow: constitution → specify → plan → tasks →
-  implement → validate.
-- Keep `AGENTS.md`, `README.md`, and the `doc/arch` corpus in sync with code;
-  persist all artifacts in English.
+Keep validate and verify green. Prefer openProject over selection thrash. Feature 002 board UX is current.
 
 ## Spec-first protocol
 
-The deterministic loop — never skip a step, never guess:
-
-- Before any work, run `speckit status`, then `speckit next`; execute exactly
-  the phase it points to — no more, no less.
-- `speckit validate` must be green before every commit.
-- The source of truth is `doc/arch`: spec > code > assumption. Never guess —
-  read the spec.
-- The guard denies writes outside the active scope; never bypass it and never
-  edit `doc/.specify/` state by hand.
-- A red `validate`/`check` blocks everything: fix the artifact, never the rule.
-
-### Git workflow
-
-- Commit after every logical change; never batch unrelated edits into a single
-  commit. The git history is part of the spec corpus — keep it legible.
-- Write Angular Conventional Commit headers: `<type>(<scope>): <subject>`, with
-  a short, objective subject (keep the header line at most 72 characters).
-- Never bypass speckit gates (guard, `validate`, `verify`) to force a commit
-  through — fix the spec or adjust the scope instead.
-- Never add AI attribution — AI co-author trailers, "generated with" notices, or
-  assistant session links — to code, docs, or commit messages; this is a
-  compliance mandate (ADR-0026).
-- If such attribution slips in, strip it with an interactive rebase before you
-  push the branch.
+spec-first: doc/arch is the source of truth — run `speckit status` then `speckit next` and read the spec before writing any code.

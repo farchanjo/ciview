@@ -3,12 +3,12 @@
 
 [project]
 org = "farchanjo"
-codeRoot = "src"
+codeRoot = "src/ciview"
 layout = "monorepo"
 # license set later via `speckit license set` if desired
 
-# [git]
-# email = "you@example.com"
+[git]
+email = "farchanjo@gmail.com"
 
 # The ACTIVE spec scope is the UNION of the static globs below (operator-managed)
 # and derived globs computed at startup: doc/arch/sdd/NNN-slug/** for the active

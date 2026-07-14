@@ -16,8 +16,9 @@ Problem: GitLab CI status is fragmented across browser pages and CLI
 subcommands; watching a build “happen” and jumping project → pipeline → job →
 log is slow.
 
-Outcome: one keyboard-driven TUI session shows CI state live, with a left
-sidebar for projects and master–detail navigation into pipelines and jobs.
+Outcome: one keyboard-driven TUI session with a **project sidebar** and a
+**pipeline stage board** on the right; job logs open only on demand (feature
+002). Live poll updates the board without navigation thrash.
 
 ## Actors
 
@@ -35,31 +36,36 @@ Primary end-to-end flow:
 
 ```mermaid
 flowchart LR
-    A[Launch ciview] --> B[Resolve host + token]
+    A[Launch ciview] --> B[Resolve glab auth]
     B --> C[Load project sidebar]
-    C --> D[Select project]
-    D --> E[List pipelines]
-    E --> F[Select pipeline]
-    F --> G[Show stages and jobs]
-    G --> H[Select job]
-    H --> I[Show detail and log tail]
-    I --> J{Still running?}
-    J -->|yes| K[Poll API]
-    K --> G
-    J -->|no| L[Idle / manual refresh]
+    C --> D[Cursor j/k on projects]
+    D --> E[Enter opens project]
+    E --> F[Pipeline strip + stage board]
+    F --> G[Navigate stages and jobs]
+    G --> H[Enter opens job log]
+    H --> I{Live poll?}
+    I -->|yes| F
+    I -->|no| J[Idle]
+    F --> K[q / Ctrl-c / SIGTERM]
+    J --> K
+    H --> K
+    K --> L[FR-27 shell-safe teardown]
+    L --> M[Parent shell clean]
 ```
 
-### Interaction model (target UX)
+### Interaction model (target UX — feature 002)
 
-Four panes when width allows:
+1. **Projects** (left sidebar) — smart/pinned/all, filter, pins, recent;
+   **j/k = cursor only**; **Enter = open project**.
+2. **Pipeline graph** (right) — pipeline strip + **stage board** (columns =
+   stages, cells = jobs). Navigate without opening logs.
+3. **Job log drawer** — only after Enter on a job; Esc closes.
+4. **Exit** — `q` / Ctrl+c / SIGTERM: ordered FR-27 teardown so the **shell
+   does not break** (see `shutdown-flow.md`).
 
-1. **Projects** (left sidebar) — membership/pins, CI pulse, path filter
-2. **Pipelines** — iid, ref, status, source, duration, age; culprit job when failed
-3. **Stages / jobs** — grouped by stage with status glyphs and duration
-4. **Detail / log** — job metadata + trace tail (follow while running)
-
-Keyboard: panel focus (Tab / h·l), move (j·k), Enter drill-down, Esc back,
-`/` filter, `r` refresh, `o` open `web_url`, `q` quit.
+Auth is **glab only**. See
+`doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md`
+and ADR-0004.
 
 ## CLI entry points (product)
 
