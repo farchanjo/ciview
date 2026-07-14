@@ -17,27 +17,55 @@ Key modules: src/ciview/main.tsx, src/ciview/nav/openProject.ts, src/ciview/ui/p
 ## Build & release (local only — NO GitHub Actions CI)
 
 GitHub Actions is **disabled** (see `.github/CI_DISABLED.md`). Never add
-`on: push` CI that builds this repo unless explicitly re-enabled.
+`on: push` / `on: pull_request` workflows that build this repo.
+
+### One command (preferred)
+
+```bash
+make ship                 # bump patch + check + binaries + tag + push + gh release
+make ship PART=minor
+make ship PART=major
+make ship PART=1.2.0      # exact version
+make ship-patch           # aliases: ship-minor, ship-major
+```
+
+`make ship` runs `scripts/ship.sh`:
+
+1. Semver bump of `package.json` (`scripts/bump-version.mjs`, `PART=…`)
+2. `make check` (tests + typecheck + lint + `speckit validate`) — skip with `SKIP_CHECK=1`
+3. `make release-binaries` — darwin on this Mac + **linux-x64 on SSH**
+4. Commit `chore: release vX.Y.Z` (package.json)
+5. Annotated tag `vX.Y.Z`
+6. `git push` branch + tag
+7. `gh release create|upload` with **local** assets from `dist/release/`
+
+| Env | Default | Meaning |
+|-----|---------|---------|
+| `PART` | `patch` | `patch` \| `minor` \| `major` \| `X.Y.Z` |
+| `SSH_TARGET` | `root@vm.services` | Linux native builder |
+| `SKIP_CHECK` | `0` | `1` = skip gates |
+| `ALLOW_DIRTY` | `0` | `1` = allow dirty tree |
+| `DRY_RUN` | `0` | `1` = bump only, stop |
+| `CODESIGN_IDENTITY` | `-` | Apple codesign (ad-hoc) |
+
+### Piecewise targets
 
 | Target | What |
 |--------|------|
-| `make build` / `make deploy` | Local host binary + optional `/usr/local/bin` |
-| `make build-darwin` | macOS artifact → `dist/release/ciview-darwin-*` |
-| `make build-linux` | Linux x64 via **SSH** `root@vm.services` (native OpenTUI) |
+| `make bump PART=…` | Only rewrite `package.json` version |
+| `make build` / `make deploy` | Host binary + optional `/usr/local/bin` |
+| `make build-darwin` | → `dist/release/ciview-darwin-*` |
+| `make build-linux` | → `dist/release/ciview-linux-x64` via SSH |
 | `make release-binaries` | darwin + linux + `SHA256SUMS` |
-| `make release` | tag `VERSION` + `gh release` upload **local** assets |
+| `make release` | tag **current** package.json version + gh upload (no bump) |
 
-```
-# Linux builder (default)
-export SSH_TARGET=root@vm.services   # or SSH_HOST=vm.services SSH_USER=root
+### Rules for agents
 
-make check
-make release-binaries
-make release VERSION=v0.1.0
-```
-
-Do **not** use `bun build --target=bun-linux-*` on macOS for OpenTUI (missing
-native optional packages). Always compile Linux on the SSH host.
+- Prefer **`make ship`** for any release. Do not invent CI workflows.
+- **Never** `bun build --target=bun-linux-*` on macOS (OpenTUI natives missing).
+- Linux **must** compile on `SSH_TARGET` (`make build-linux` / ship).
+- Binaries live under `dist/release/` (gitignored); only uploaded via `gh release`.
+- Scripts: `scripts/ship.sh`, `scripts/bump-version.mjs`. Makefile wires `ship` / `bump`.
 
 ## Commands
 
@@ -48,6 +76,9 @@ bun test
 bun run typecheck
 bun run check
 bun run build
+make ship
+make ship PART=minor
+make bump PART=patch
 make build-darwin
 make build-linux
 make release-binaries

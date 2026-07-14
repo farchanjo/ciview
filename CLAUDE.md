@@ -12,13 +12,37 @@ Paths: doc/arch/memory/constitution.md; doc/arch/sdd/001-gitlab-ci-tui-cockpit-w
 
 ## Build & release (local only)
 
-**Do not enable GitHub Actions CI.** Builds are local:
+**Do not enable GitHub Actions CI.** See `.github/CI_DISABLED.md` and AGENTS.md.
 
-- macOS: `make build-darwin` on the developer Mac
-- Linux x64: `make build-linux` over SSH (`root@vm.services` by default)
-- Release: `make release-binaries` then `make release` (gh upload of local files)
+### Ship in one command
 
-See AGENTS.md and `.github/CI_DISABLED.md`.
+```bash
+make ship                 # patch bump + check + darwin/linux + tag + push + gh release
+make ship PART=minor
+make ship PART=major
+make ship PART=1.2.0
+make ship-patch           # also: ship-minor, ship-major
+```
+
+Pipeline (`scripts/ship.sh`):
+
+1. Bump `package.json` (`PART=patch|minor|major|X.Y.Z`)
+2. `make check` (unless `SKIP_CHECK=1`)
+3. Darwin binary on this Mac; Linux x64 via **SSH** `root@vm.services`
+4. Commit + tag `vX.Y.Z` + push
+5. `gh release` with local assets only (`dist/release/`)
+
+| Env | Use |
+|-----|-----|
+| `PART` | Semver part or exact version |
+| `SSH_TARGET` | Default `root@vm.services` |
+| `SKIP_CHECK=1` | Skip tests/validate |
+| `ALLOW_DIRTY=1` | Ship with dirty tree |
+| `DRY_RUN=1` | Bump print only |
+
+Piecewise: `make bump`, `make release-binaries`, `make release` (no bump).
+
+**Agents:** prefer `make ship`. Never cross-compile Linux on macOS for OpenTUI.
 
 ## Commands
 
@@ -29,6 +53,9 @@ bun test
 bun run typecheck
 bun run check
 bun run build
+make ship
+make ship PART=minor
+make bump PART=patch
 make build-darwin
 make build-linux
 make release-binaries

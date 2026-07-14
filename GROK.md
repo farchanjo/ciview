@@ -12,16 +12,47 @@ Corpus under doc/arch. Implementation layers under src/ciview: auth, cli, config
 
 ## Build & release (local only)
 
-GitHub Actions CI is **off**. Never rely on GHA to compile.
+GitHub Actions CI is **off** (`.github/CI_DISABLED.md`). Never rely on GHA.
+
+### Preferred: one-shot ship
+
+```bash
+make ship                 # patch + check + binaries + tag + push + GitHub Release
+make ship PART=minor
+make ship PART=major
+make ship PART=1.2.0
+make ship-patch | ship-minor | ship-major
+```
+
+What `make ship` does (`scripts/ship.sh` + `scripts/bump-version.mjs`):
+
+| Step | Action |
+|------|--------|
+| 1 | Semver bump `package.json` (`PART`) |
+| 2 | `make check` (skip: `SKIP_CHECK=1`) |
+| 3 | `build-darwin` on this Mac (codesign) |
+| 4 | `build-linux` via **SSH** `SSH_TARGET` (default `root@vm.services`) |
+| 5 | `SHA256SUMS` in `dist/release/` |
+| 6 | Commit `chore: release vX.Y.Z`, annotated tag, push |
+| 7 | `gh release create|upload` **local** assets only |
+
+| Env | Default | Notes |
+|-----|---------|--------|
+| `PART` | `patch` | also `minor` / `major` / `1.2.3` |
+| `SSH_TARGET` | `root@vm.services` | Linux native OpenTUI build |
+| `ALLOW_DIRTY` | `0` | set `1` if tree dirty |
+| `DRY_RUN` | `0` | set `1` to only bump and stop |
+
+Piecewise (when not shipping):
 
 | Command | Notes |
 |---------|--------|
-| `make build-darwin` | This Mac → `dist/release/ciview-darwin-arm64` (or x64) |
-| `make build-linux` | `ssh root@vm.services` rsync + native `bun build --compile` |
-| `make release-binaries` | Both platforms + SHA256SUMS |
-| `make release` | `git tag` + `gh release create` with **local** assets |
+| `make bump PART=…` | package.json only |
+| `make build-darwin` | → `dist/release/ciview-darwin-*` |
+| `make build-linux` | rsync + compile on SSH host |
+| `make release-binaries` | both + checksums |
+| `make release` | tag **current** version + gh upload (no bump) |
 
-SSH defaults: `SSH_TARGET=root@vm.services`. Override with env if needed.
 OpenTUI has platform-native deps — **no** macOS→Linux cross-compile.
 
 ## Commands
@@ -33,6 +64,9 @@ bun test
 bun run typecheck
 bun run check
 bun run build
+make ship
+make ship PART=minor
+make bump PART=patch
 make build-darwin
 make build-linux
 make release-binaries

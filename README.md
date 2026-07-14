@@ -123,22 +123,21 @@ In the TUI: press **`?`** for the shortcut help overlay.
 
 ## :package: Release binaries (local only — no GitHub Actions)
 
-**CI on GitHub is disabled.** Binaries are compiled on the developer machine
-and on a Linux SSH builder, then uploaded with `gh release`.
+**CI on GitHub is disabled.** Prefer one command:
+
+```bash
+make ship                 # bump patch + check + binaries + tag + push + gh release
+make ship PART=minor
+make ship PART=1.2.0
+```
 
 | Artifact | Builder |
 |----------|---------|
-| `ciview-darwin-arm64` (or x64) | This Mac (`make build-darwin`) |
-| `ciview-linux-x64` | `ssh root@vm.services` (`make build-linux`) |
+| `ciview-darwin-arm64` (or x64) | This Mac |
+| `ciview-linux-x64` | `ssh root@vm.services` (native OpenTUI) |
 
-```bash
-make check
-make release-binaries          # darwin + linux + SHA256SUMS → dist/release/
-make release VERSION=v0.1.0    # git tag + gh release with local assets
-```
-
-Defaults: `SSH_TARGET=root@vm.services`. Override if needed.
-See [`.github/CI_DISABLED.md`](.github/CI_DISABLED.md) and the Makefile.
+Piecewise: `make release-binaries` then `make release`.  
+Docs: [AGENTS.md](AGENTS.md), [`.github/CI_DISABLED.md`](.github/CI_DISABLED.md), Makefile.
 
 ## Specs
 

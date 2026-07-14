@@ -3,13 +3,21 @@
 # Dev / local install (macOS):
 #   make build | sign | install | deploy | uninstall
 #
-# Multi-platform release artifacts (local only — never GitHub CI):
-#   make release-binaries   # darwin (this Mac) + linux-x64 via SSH root@vm.services
-#   make release            # tag + GitHub Release with binaries from dist/release/
+# One-shot ship (preferred):
+#   make ship                 # bump patch → check → binaries → tag → push → gh release
+#   make ship PART=minor
+#   make ship PART=1.2.0
+#   make bump PART=patch      # only package.json semver
+#
+# Multi-platform pieces (local only — never GitHub CI):
+#   make release-binaries     # darwin (this Mac) + linux-x64 via SSH root@vm.services
+#   make release              # tag current package.json version + gh upload
 #
 # Env overrides:
 #   SSH_HOST=vm.services  SSH_USER=root  SSH_TARGET=root@vm.services
-#   VERSION=v0.1.0        CODESIGN_IDENTITY=-
+#   PART=patch|minor|major|X.Y.Z
+#   SKIP_CHECK=1  ALLOW_DIRTY=1  DRY_RUN=1
+#   VERSION=v0.1.0  CODESIGN_IDENTITY=-
 #   PREFIX=/usr/local
 
 SHELL          := /bin/bash
@@ -60,12 +68,15 @@ else
   CODESIGN_CMD = codesign --force --sign "$(CODESIGN_IDENTITY)" --options runtime --timestamp "$(1)"
 endif
 
+PART           ?= patch
+
 .PHONY: help all print-config \
 	start test typecheck lint check validate clean \
 	build sign verify-sign install deploy uninstall \
 	build-darwin build-linux release-binaries checksums \
 	release tag push-main ensure-repo \
-	ssh-check remote-bun
+	ssh-check remote-bun \
+	bump ship ship-patch ship-minor ship-major
 
 .DEFAULT_GOAL := help
 
@@ -75,16 +86,26 @@ help: ## Show targets
 	@echo "  Dev:"
 	@echo "    make start | test | check | build | sign | deploy | uninstall"
 	@echo ""
-	@echo "  Multi-arch release (no GHA):"
+	@echo "  Ship (one command — preferred):"
+	@echo "    make ship                 bump patch + check + binaries + tag + push + gh release"
+	@echo "    make ship PART=minor      same with minor bump"
+	@echo "    make ship PART=major      major bump"
+	@echo "    make ship PART=1.2.0      set exact version"
+	@echo "    make ship-patch|ship-minor|ship-major"
+	@echo "    make bump PART=patch      only rewrite package.json version"
+	@echo ""
+	@echo "  Multi-arch pieces (no GHA):"
 	@echo "    make build-darwin       → $(DARWIN_BIN)"
 	@echo "    make build-linux        → $(LINUX_BIN)  via $(SSH_TARGET)"
 	@echo "    make release-binaries   → both + SHA256SUMS"
 	@echo "    make release            → git tag $(VERSION) + gh release + assets"
 	@echo ""
-	@echo "  Env: SSH_TARGET=$(SSH_TARGET)  VERSION=$(VERSION)  CODESIGN_IDENTITY=$(CODESIGN_IDENTITY)"
+	@echo "  Env: SSH_TARGET=$(SSH_TARGET)  PART=$(PART)  VERSION=$(VERSION)"
+	@echo "       SKIP_CHECK=1  ALLOW_DIRTY=1  DRY_RUN=1  CODESIGN_IDENTITY=$(CODESIGN_IDENTITY)"
 
 print-config:
 	@echo "VERSION=$(VERSION)"
+	@echo "PART=$(PART)"
 	@echo "DARWIN_BIN=$(DARWIN_BIN)"
 	@echo "LINUX_BIN=$(LINUX_BIN)"
 	@echo "SSH_TARGET=$(SSH_TARGET)"
@@ -261,6 +282,7 @@ tag:
 	@echo "tagged $(VERSION)"
 
 ## Create/update GitHub Release and upload local binaries. Never triggers CI builds.
+## Prefer `make ship` (includes semver bump). Use this when package.json already bumped.
 release: release-binaries ensure-repo
 	@test -f "$(DARWIN_BIN)" || { echo "missing $(DARWIN_BIN)"; exit 1; }
 	@test -f "$(LINUX_BIN)" || { echo "missing $(LINUX_BIN)"; exit 1; }
@@ -272,12 +294,14 @@ release: release-binaries ensure-repo
 	git push origin "$(VERSION)" 2>/dev/null || git push origin "refs/tags/$(VERSION)"
 	@echo "==> GitHub Release (assets from local build — CI disabled)"
 	@if gh release view "$(VERSION)" >/dev/null 2>&1; then \
+		gh release edit "$(VERSION)" --draft=false --latest --title "ciview $(VERSION)" 2>/dev/null || true; \
 		gh release upload "$(VERSION)" \
 			"$(DARWIN_BIN)" "$(LINUX_BIN)" "$(CHECKSUMS)" --clobber; \
 	else \
 		gh release create "$(VERSION)" \
 			"$(DARWIN_BIN)" "$(LINUX_BIN)" "$(CHECKSUMS)" \
 			--title "ciview $(VERSION)" \
+			--latest \
 			--notes "$$(printf '%s\n' \
 				'## ciview $(VERSION)' \
 				'' \
@@ -296,11 +320,38 @@ release: release-binaries ensure-repo
 				'```' \
 				'' \
 				'Auth: `glab auth login` (glab-only).' \
+				'' \
+				'Rebuild: `make ship PART=patch`' \
 			)"; \
 	fi
 	@echo ""
 	@echo "Release URL:"
 	@gh release view "$(VERSION)" --json url -q .url
+
+# --- semver bump + one-shot ship --------------------------------------------
+
+## Bump package.json only. PART=patch|minor|major|X.Y.Z
+bump:
+	@command -v bun >/dev/null || { echo "error: bun required"; exit 1; }
+	@NEW=$$(bun scripts/bump-version.mjs "$(PART)"); \
+	echo "bumped package.json → $$NEW (tag would be v$$NEW)"
+
+## Full pipeline: bump → check → darwin+linux binaries → commit → tag → push → gh release.
+## Implementation: scripts/ship.sh (see AGENTS.md).
+ship:
+	@chmod +x scripts/ship.sh scripts/bump-version.mjs 2>/dev/null || true
+	PART="$(PART)" SKIP_CHECK="$(SKIP_CHECK)" SKIP_COMMIT="$(SKIP_COMMIT)" \
+		ALLOW_DIRTY="$(ALLOW_DIRTY)" DRY_RUN="$(DRY_RUN)" SSH_TARGET="$(SSH_TARGET)" \
+		./scripts/ship.sh
+
+ship-patch:
+	@$(MAKE) ship PART=patch
+
+ship-minor:
+	@$(MAKE) ship PART=minor
+
+ship-major:
+	@$(MAKE) ship PART=major
 
 clean:
 	rm -rf $(DIST_DIR)
