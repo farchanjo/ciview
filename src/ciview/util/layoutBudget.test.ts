@@ -6,6 +6,8 @@ import {
   effectiveSidebarVisible,
   logPageStep,
   sidebarWidthFor,
+  stripRowsFor,
+  stripWindowStart,
 } from "./layoutBudget.ts";
 
 describe("densityForHeight", () => {
@@ -130,5 +132,37 @@ describe("effectiveSidebarVisible / sidebarWidthFor", () => {
     expect(sidebarWidthFor(200, true)).toBeLessThanOrEqual(32);
     expect(sidebarWidthFor(80, true)).toBeGreaterThanOrEqual(18);
     expect(sidebarWidthFor(120, false)).toBe(0);
+  });
+});
+
+describe("stripWindowStart (pipeline strip scroll)", () => {
+  test("no scroll when list fits window", () => {
+    expect(stripWindowStart(0, 5, 3)).toBe(0);
+    expect(stripWindowStart(2, 5, 3)).toBe(0);
+  });
+
+  test("keeps cursor visible when scrolling down into older pipelines", () => {
+    // window 3, total 10: cursor 0..2 → start 0; cursor 3 → start 1; cursor 9 → start 7
+    expect(stripWindowStart(0, 3, 10)).toBe(0);
+    expect(stripWindowStart(2, 3, 10)).toBe(0);
+    expect(stripWindowStart(3, 3, 10)).toBe(1);
+    expect(stripWindowStart(5, 3, 10)).toBe(3);
+    expect(stripWindowStart(9, 3, 10)).toBe(7);
+  });
+
+  test("clamps bad cursor / empty", () => {
+    expect(stripWindowStart(-1, 3, 10)).toBe(0);
+    expect(stripWindowStart(99, 3, 10)).toBe(7);
+    expect(stripWindowStart(0, 3, 0)).toBe(0);
+    expect(stripWindowStart(0, 0, 10)).toBe(0);
+  });
+});
+
+describe("stripRowsFor", () => {
+  test("taller strip than legacy minima", () => {
+    expect(stripRowsFor("compact", 18)).toBeGreaterThanOrEqual(2);
+    expect(stripRowsFor("normal", 30)).toBeGreaterThanOrEqual(4);
+    expect(stripRowsFor("comfortable", 40)).toBeGreaterThanOrEqual(5);
+    expect(stripRowsFor("comfortable", 60)).toBeGreaterThanOrEqual(8);
   });
 });

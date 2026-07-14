@@ -1,6 +1,6 @@
 import type { Job, Pipeline } from "../../gitlab/types.ts";
 import type { RootStores } from "../../state/root.ts";
-import { computeLayoutBudget } from "../../util/layoutBudget.ts";
+import { computeLayoutBudget, stripWindowStart } from "../../util/layoutBudget.ts";
 import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
 import { LoadingLine } from "../chrome/LoadingLine.tsx";
 import { useStore } from "../hooks/useStore.ts";
@@ -81,8 +81,17 @@ export function PipelineGraph(props: { stores: RootStores }) {
       ? ` Graph · ${openProj?.pathWithNamespace ?? "?"} · child×${childDepth} Esc↑ `
       : ` Graph · ${openProj?.pathWithNamespace ?? "?"} · ${budget.density} `;
 
-  // Strip box height: title row + stripCount lines + padding; cap by budget
-  const stripBoxHeight = Math.min(2 + stripCount, Math.max(3, stripCount + 2));
+  // Windowed strip: follow pipelineIndex so older pipelines appear when j/k down.
+  const stripStart = stripWindowStart(board.pipelineIndex, stripCount, pipeItems.length);
+  const stripVisible = pipeItems.slice(stripStart, stripStart + stripCount);
+  const aboveCount = stripStart;
+  const belowCount = Math.max(0, pipeItems.length - stripStart - stripCount);
+  const overflowHint =
+    aboveCount > 0 || belowCount > 0
+      ? `  …${aboveCount > 0 ? ` ↑${aboveCount}` : ""}${aboveCount > 0 && belowCount > 0 ? " ·" : ""}${belowCount > 0 ? ` +${belowCount} more` : ""}`
+      : null;
+  // Strip box: border chrome (~2) + pipeline rows + optional overflow line
+  const stripBoxHeight = Math.max(3, stripCount + 2 + (overflowHint ? 1 : 0));
 
   return (
     <box
@@ -111,18 +120,19 @@ export function PipelineGraph(props: { stores: RootStores }) {
         {pipelines.status !== "loading" && pipeItems.length === 0 ? (
           <text fg="#8b949e">no pipelines</text>
         ) : null}
-        {pipeItems.slice(0, stripCount).map((p, i) => (
-          <PipelineStripRow
-            key={p.id}
-            pipeline={p}
-            active={i === board.pipelineIndex && stripFocus}
-            selected={p.id === sel.pipelineId}
-            maxLen={Math.max(24, chrome.termWidth - (sidebarOn ? budget.sidebarWidth + 6 : 8))}
-          />
-        ))}
-        {pipeItems.length > stripCount ? (
-          <text fg="#6e7681">  … +{pipeItems.length - stripCount} more</text>
-        ) : null}
+        {stripVisible.map((p, i) => {
+          const absIndex = stripStart + i;
+          return (
+            <PipelineStripRow
+              key={p.id}
+              pipeline={p}
+              active={absIndex === board.pipelineIndex && stripFocus}
+              selected={p.id === sel.pipelineId}
+              maxLen={Math.max(24, chrome.termWidth - (sidebarOn ? budget.sidebarWidth + 6 : 8))}
+            />
+          );
+        })}
+        {overflowHint ? <text fg="#6e7681">{overflowHint}</text> : null}
       </box>
 
       <box

@@ -79,12 +79,32 @@ export function sidebarWidthFor(termWidth: number, visible: boolean): number {
 }
 
 export function stripRowsFor(density: Density, termHeight: number): number {
-  if (density === "compact") return Math.min(2, Math.max(1, termHeight - 8));
-  if (density === "normal") return termHeight < 28 ? 2 : 3;
+  // Slightly taller strip so operators can scan more pipeline history (j/k).
+  if (density === "compact") return Math.min(3, Math.max(2, termHeight - 8));
+  if (density === "normal") return termHeight < 28 ? 3 : 4;
   // comfortable
-  if (termHeight < 40) return 3;
-  if (termHeight < 50) return 4;
-  return 5;
+  if (termHeight < 40) return 5;
+  if (termHeight < 50) return 6;
+  return 8;
+}
+
+/**
+ * Window start so `cursor` stays visible in a fixed-height strip list.
+ * Pure: when total ≤ windowSize → 0; otherwise pin cursor in view (prefer
+ * showing newer rows above when scrolling down into older pipelines).
+ */
+export function stripWindowStart(
+  cursor: number,
+  windowSize: number,
+  total: number,
+): number {
+  if (total <= 0 || windowSize <= 0) return 0;
+  if (total <= windowSize) return 0;
+  const c = clamp(cursor, 0, total - 1);
+  const maxStart = total - windowSize;
+  // Keep cursor in the last slot when walking down (classic list follow).
+  const start = c - windowSize + 1;
+  return clamp(start, 0, maxStart);
 }
 
 export function stageColWidthFor(
