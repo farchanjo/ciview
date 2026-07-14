@@ -9,6 +9,7 @@ import {
 import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
 import { LoadingLine } from "../chrome/LoadingLine.tsx";
 import { useStore } from "../hooks/useStore.ts";
+import { fmtDur, jobDisplayDuration } from "./PipelineGraph.tsx";
 
 // Re-export nav helpers for existing imports.
 export {
@@ -61,6 +62,8 @@ export function JobLogDrawer(props: { stores: RootStores }) {
   const title = job
     ? ` Job log · ${statusGlyph(job.status)} ${job.name} · ${mode} · ✗${errHit} · ${budget.density} `
     : " Job log ";
+  const jobDur = job ? jobDisplayDuration(job) : undefined;
+  const jobDurLabel = jobDur != null ? ` · ${fmtDur(jobDur)}` : "";
 
   return (
     <box
@@ -82,7 +85,7 @@ export function JobLogDrawer(props: { stores: RootStores }) {
       {job ? (
         <text fg={statusColor(job.status)}>
           {job.status} · {job.stage}
-          {job.duration != null ? ` · ${Math.round(job.duration)}s` : ""}
+          {jobDurLabel}
           {job.isBridge ? " · bridge" : ""}
           {` · ${logView.totalLines} lines`}
           {logView.errorCount ? ` · ${logView.errorCount} errors` : ""}

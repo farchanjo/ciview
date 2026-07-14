@@ -107,6 +107,9 @@ export function stripWindowStart(
   return clamp(start, 0, maxStart);
 }
 
+/** Max stage column width — room for long job names + reserved duration (FR-32). */
+export const STAGE_COL_WIDTH_MAX = 28;
+
 export function stageColWidthFor(
   termWidth: number,
   stageCount: number,
@@ -115,9 +118,9 @@ export function stageColWidthFor(
 ): number {
   const side = sidebarOn ? sidebarWidth : 0;
   const usable = Math.max(20, termWidth - side - 4);
-  if (stageCount <= 0) return clamp(Math.floor(usable / 3), 10, 22);
+  if (stageCount <= 0) return clamp(Math.floor(usable / 3), 10, STAGE_COL_WIDTH_MAX);
   const cols = Math.min(stageCount, 8);
-  return clamp(Math.floor(usable / cols), 10, 22);
+  return clamp(Math.floor(usable / cols), 10, STAGE_COL_WIDTH_MAX);
 }
 
 function modalBox(

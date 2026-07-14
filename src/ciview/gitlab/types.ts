@@ -52,7 +52,10 @@ export interface Job {
   status: CiStatus;
   allowFailure: boolean;
   webUrl?: string;
+  /** Finished duration from GitLab (seconds), when the job has completed. */
   duration?: number;
+  /** ISO start time — used to show live elapsed for running jobs. */
+  startedAt?: string;
   /** True when this row comes from a bridge (trigger/child pipeline). */
   isBridge?: boolean;
   /** Downstream pipeline id if bridge. */

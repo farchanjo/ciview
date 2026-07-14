@@ -1,4 +1,5 @@
 import type { Job, Pipeline } from "../../gitlab/types.ts";
+import { isActiveStatus } from "../../gitlab/types.ts";
 import type { RootStores } from "../../state/root.ts";
 import { computeLayoutBudget, stripWindowStart } from "../../util/layoutBudget.ts";
 import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
@@ -26,6 +27,44 @@ export function fmtAge(iso?: string): string {
   const h = Math.floor(m / 60);
   if (h < 48) return `${h}h`;
   return `${Math.floor(h / 24)}d`;
+}
+
+/**
+ * Effective job duration in seconds: finished duration from API, else live
+ * elapsed from startedAt for active jobs (updates on each poll/render).
+ */
+export function jobDisplayDuration(
+  job: Pick<Job, "duration" | "startedAt" | "status">,
+  nowMs: number = Date.now(),
+): number | undefined {
+  if (job.duration != null && !Number.isNaN(job.duration)) return job.duration;
+  if (!job.startedAt || !isActiveStatus(job.status)) return undefined;
+  const started = Date.parse(job.startedAt);
+  if (Number.isNaN(started) || started > nowMs) return undefined;
+  return (nowMs - started) / 1000;
+}
+
+/**
+ * Board cell line: glyph + name + optional allow_failure + duration.
+ * Duration is reserved first so long job names never swallow the time (FR-32).
+ */
+export function formatJobBoardLine(
+  job: Pick<Job, "name" | "status" | "allowFailure" | "duration" | "startedAt">,
+  maxLen: number,
+  nowMs: number = Date.now(),
+): string {
+  const prefix = `${statusGlyph(job.status)} `;
+  const af = job.allowFailure ? "!" : "";
+  const secs = jobDisplayDuration(job, nowMs);
+  const dur = secs != null ? ` ${fmtDur(secs)}` : "";
+  const suffix = `${af}${dur}`;
+  const nameBudget = Math.max(0, maxLen - prefix.length - suffix.length);
+  let name = job.name;
+  if (name.length > nameBudget) {
+    if (nameBudget <= 1) name = name.slice(0, nameBudget);
+    else name = `${name.slice(0, nameBudget - 1)}…`;
+  }
+  return `${prefix}${name}${suffix}`;
 }
 
 function jobsInStage(jobs: Job[], stage: string): Job[] {
@@ -174,12 +213,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
               {stageJobs.map((job, ji) => {
                 const cellActive = stageActive && ji === board.jobIndex;
                 const selected = job.id === sel.jobId;
-                const af = job.allowFailure ? "!" : "";
-                const dur = job.duration != null ? ` ${fmtDur(job.duration)}` : "";
-                const line = `${statusGlyph(job.status)} ${job.name}${af}${dur}`.slice(
-                  0,
-                  colW - 2,
-                );
+                const line = formatJobBoardLine(job, colW - 2);
                 return (
                   <text
                     key={job.id}

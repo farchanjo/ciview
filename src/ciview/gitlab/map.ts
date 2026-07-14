@@ -37,6 +37,7 @@ export function mapJob(raw: Record<string, unknown>): Job {
     allowFailure: Boolean(raw.allow_failure ?? raw.allowFailure ?? false),
     webUrl: raw.web_url != null ? String(raw.web_url) : undefined,
     duration: raw.duration != null ? Number(raw.duration) : undefined,
+    startedAt: raw.started_at != null ? String(raw.started_at) : undefined,
   };
 }
 
@@ -53,6 +54,7 @@ export function mapBridge(raw: Record<string, unknown>): Job {
     allowFailure: Boolean(raw.allow_failure ?? false),
     webUrl: raw.web_url != null ? String(raw.web_url) : undefined,
     duration: raw.duration != null ? Number(raw.duration) : undefined,
+    startedAt: raw.started_at != null ? String(raw.started_at) : undefined,
     isBridge: true,
     downstreamPipelineId: downstream?.id != null ? Number(downstream.id) : undefined,
   };

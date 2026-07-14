@@ -30,7 +30,7 @@ describe("mapPipeline (FR-03/04)", () => {
 });
 
 describe("mapJob / mapBridge (FR-05/13)", () => {
-  test("mapJob maps duration and allow_failure", () => {
+  test("mapJob maps duration, started_at and allow_failure", () => {
     const j = mapJob({
       id: 99,
       name: "test",
@@ -38,9 +38,11 @@ describe("mapJob / mapBridge (FR-05/13)", () => {
       status: "success",
       allow_failure: true,
       duration: 42.2,
+      started_at: "2026-07-14T12:00:00Z",
       pipeline: { id: 10 },
     });
     expect(j.duration).toBe(42.2);
+    expect(j.startedAt).toBe("2026-07-14T12:00:00Z");
     expect(j.allowFailure).toBe(true);
     expect(j.isBridge).toBeUndefined();
   });

@@ -9,7 +9,13 @@ import {
   scrollLogFullPage,
 } from "../util/logNav.ts";
 import { logVisibleLines } from "../util/smartLog.ts";
-import { effectiveSidebarVisible, fmtAge, fmtDur } from "./panes/PipelineGraph.tsx";
+import {
+  effectiveSidebarVisible,
+  fmtAge,
+  fmtDur,
+  formatJobBoardLine,
+  jobDisplayDuration,
+} from "./panes/PipelineGraph.tsx";
 
 const basePrefs: Prefs = {
   pins: [],
@@ -32,6 +38,112 @@ describe("fmtDur / fmtAge (FR-03/32)", () => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
     expect(fmtAge(fiveMinAgo)).toBe("5m");
     expect(fmtAge(undefined)).toBe("");
+  });
+});
+
+describe("formatJobBoardLine (FR-32 duration reserved)", () => {
+  test("keeps duration when name is long", () => {
+    const line = formatJobBoardLine(
+      {
+        name: "build_sflink_image",
+        status: "success",
+        allowFailure: false,
+        duration: 47,
+      },
+      20,
+    );
+    expect(line.endsWith(" 47s")).toBe(true);
+    expect(line.length).toBeLessThanOrEqual(20);
+    expect(line.startsWith("✓ ")).toBe(true);
+  });
+
+  test("short name keeps full name and duration", () => {
+    const line = formatJobBoardLine(
+      {
+        name: "detect_changes",
+        status: "success",
+        allowFailure: false,
+        duration: 6,
+      },
+      22,
+    );
+    expect(line).toBe("✓ detect_changes 6s");
+  });
+
+  test("allow_failure marker stays before duration", () => {
+    const line = formatJobBoardLine(
+      {
+        name: "lint_optional_very_long_name",
+        status: "failed",
+        allowFailure: true,
+        duration: 12,
+      },
+      18,
+    );
+    expect(line).toMatch(/! 12s$/);
+    expect(line.length).toBeLessThanOrEqual(18);
+  });
+
+  test("no duration omits time suffix", () => {
+    const line = formatJobBoardLine(
+      {
+        name: "pending_job",
+        status: "pending",
+        allowFailure: false,
+      },
+      20,
+    );
+    expect(line).toBe("● pending_job");
+  });
+
+  test("running job uses startedAt for live elapsed", () => {
+    const now = Date.parse("2026-07-14T12:00:30Z");
+    const line = formatJobBoardLine(
+      {
+        name: "build_sflink_image",
+        status: "running",
+        allowFailure: false,
+        startedAt: "2026-07-14T12:00:00Z",
+      },
+      22,
+      now,
+    );
+    expect(line.endsWith(" 30s")).toBe(true);
+    expect(line.length).toBeLessThanOrEqual(22);
+  });
+});
+
+describe("jobDisplayDuration", () => {
+  test("prefers finished duration over startedAt", () => {
+    expect(
+      jobDisplayDuration({
+        duration: 42,
+        startedAt: "2026-07-14T12:00:00Z",
+        status: "success",
+      }),
+    ).toBe(42);
+  });
+
+  test("computes live elapsed for active jobs", () => {
+    const now = Date.parse("2026-07-14T12:01:00Z");
+    expect(
+      jobDisplayDuration(
+        {
+          startedAt: "2026-07-14T12:00:00Z",
+          status: "running",
+        },
+        now,
+      ),
+    ).toBe(60);
+  });
+
+  test("no elapsed for finished jobs without duration", () => {
+    expect(
+      jobDisplayDuration({
+        startedAt: "2026-07-14T12:00:00Z",
+        status: "success",
+      }),
+    ).toBeUndefined();
   });
 });
 
