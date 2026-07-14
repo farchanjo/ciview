@@ -15,7 +15,9 @@
     "check": "bun test && tsc --noEmit",
     "build": "bun build src/ciview/main.tsx --compile --outfile dist/ciview",
     "deploy": "make deploy",
-    "lint": "eslint src/ciview"
+    "lint": "eslint src/ciview",
+    "hooks:install": "make hooks-install",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && make hooks-install || true"
   },
   "dependencies": {
     "@opentui/core": "0.4.3",

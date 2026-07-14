@@ -55,10 +55,29 @@ Piecewise (when not shipping):
 
 OpenTUI has platform-native deps — **no** macOS→Linux cross-compile.
 
+## Local git hooks
+
+Versioned under `githooks/` (`core.hooksPath`):
+
+```bash
+make hooks-install      # required once after clone
+make hooks-status
+make hooks-uninstall
+```
+
+| Hook | What |
+|------|------|
+| `pre-commit` | no secrets; eslint staged TS; typecheck + tests if src changes; speckit if doc/arch |
+| `commit-msg` | Conventional Commits |
+| `pre-push` | `make check` |
+
+Skip once: `SKIP_HOOKS=1 git commit|push …`.
+
 ## Commands
 
 ```
 bun install
+make hooks-install
 bun run start
 bun test
 bun run typecheck

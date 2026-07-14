@@ -44,10 +44,25 @@ Piecewise: `make bump`, `make release-binaries`, `make release` (no bump).
 
 **Agents:** prefer `make ship`. Never cross-compile Linux on macOS for OpenTUI.
 
+## Local git hooks
+
+```bash
+make hooks-install    # once per clone — sets core.hooksPath=githooks
+```
+
+| Hook | Behavior |
+|------|----------|
+| `pre-commit` | secrets block; eslint staged TS; typecheck+test if `src/` changes; `speckit validate` if `doc/arch/` changes |
+| `commit-msg` | Conventional Commits (`feat:`, `fix:`, `chore:`, …) |
+| `pre-push` | `make check` |
+
+Skip: `SKIP_HOOKS=1 git commit …`. Details: AGENTS.md.
+
 ## Commands
 
 ```
 bun install
+make hooks-install
 bun run start
 bun test
 bun run typecheck

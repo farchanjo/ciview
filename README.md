@@ -1,198 +1,270 @@
-# :rocket: ciview
+# 🚀 ciview
 
 [![spec-driven](https://img.shields.io/badge/spec--driven-development-blue)](doc/arch/)
 [![runtime](https://img.shields.io/badge/runtime-Bun-f472b6)](https://bun.sh)
 [![ui](https://img.shields.io/badge/UI-OpenTUI-0ea5e9)](https://opentui.com)
-[![ci](https://img.shields.io/badge/focus-GitLab%20CI-fc6d26)](https://docs.gitlab.com/ee/ci/)
+[![focus](https://img.shields.io/badge/focus-GitLab%20CI-fc6d26)](https://docs.gitlab.com/ee/ci/)
+[![release](https://img.shields.io/github/v/release/farchanjo/ciview)](https://github.com/farchanjo/ciview/releases)
 
-**ciview** is a terminal CI cockpit for GitLab: a multi-pane OpenTUI navigator
-for **projects → pipelines → jobs → logs**. Think of it as a turbinated
-`glab ci` / pipeline view — keyboard-first, live while builds run, **CI only**.
+**Your GitLab CI, right in the terminal.**  
+No more tab tennis between the browser, `glab`, and “which job failed again?”
 
-> Status: **MVP implemented** under [`src/ciview/`](src/ciview/).  
-> Specs and ADRs live under [`doc/arch/`](doc/arch/).
+**ciview** is a small keyboard-first cockpit for **pipelines, jobs, and logs** — nothing else.  
+Think of it as a friendly, live **CI board** that lives next to your shell.
 
-## :books: Index
+> ✨ Spec-driven: behaviour is defined under [`doc/arch/`](doc/arch/).  
+> Code lives in [`src/ciview/`](src/ciview/).
+
+## Index
 
 - [Why](#why)
-- [Features (planned MVP)](#features-planned-mvp)
-- [Architecture](#architecture)
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Keys](#keys)
+- [Flow](#flow)
 - [Stack](#stack)
-- [Repository layout](#repository-layout)
-- [Run](#run)
+- [Releases](#releases)
+- [Develop](#develop)
 - [Specs](#specs)
-- [Auth](#auth-planned)
-- [Documentation](#documentation)
 - [Contributing](#contributing)
+- [FAQ](#faq)
 
-## :compass: Why
+---
 
-GitLab CI is powerful, but watching it “happen” means jumping between browser
-pages and CLI subcommands. **ciview** keeps you in the terminal with:
+## Why
 
-- a **left project sidebar** (pins + CI pulse)
-- **pipelines** and **jobs by stage** with clear status glyphs
-- **job log tail** while a build is running
-- **live poll** only when something is active (async, non-blocking)
+GitLab CI is great — but *watching* a build usually means:
 
-## :sparkles: Features (planned MVP)
+- 🌐 opening three browser tabs  
+- ⌨️ juggling CLI subcommands  
+- 😵 losing the failed job name in the noise  
 
-- **Project sidebar** (smart/pinned/all, filter) — `j/k` cursor only, **Enter opens**
-- **Pipeline stage board** on the right (strip + columns per stage)
-- **Job log on demand** (Enter on job; Esc closes)
-- **Shortcut-first** UX with in-app **Help (`?`)**
-- See feature 002: [`ux-layout.md`](doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md)
-- Read-only GitLab REST API v4 (no retry/cancel in MVP)
-- Auth **only via [glab](https://gitlab.com/gitlab-org/cli)** (install + `glab auth login` if missing)
-- Focus modes: dashboard, current git remote (`.`), `group/project` path
-- Open focused pipeline/job in the browser
+**ciview** keeps you in one place:
 
-Out of scope for MVP: issues, MR editing, source browser, registry, runner admin.
+| Zone | What you see |
+|------|----------------|
+| 📂 **Left** | Projects (pins, recent, filter) |
+| 🧱 **Right** | Pipeline strip + **stage board** (jobs by stage) |
+| 📜 **Drawer** | Job log — only when you open a job |
 
-## :gear: Architecture
+Cursor moves with `j`/`k`. **Enter** opens. Logs don’t spam the screen until you ask.
 
-Async-first on **Bun** ([ADR-0002](doc/arch/adr/0002-async-workers-queue-observer-bun.md)):
+---
+
+## Features
+
+- 📂 **Project sidebar** — smart / pinned / all, filter, pins, recent  
+- 🧱 **Stage board** — columns = stages, cells = jobs (status + duration)  
+- 📜 **Log on demand** — Enter on a job; Esc closes; follow with `f`  
+- ⌨️ **Keyboard-first** — press **`?`** anytime for the full cheat sheet  
+- 🔴 **Live updates** — while LIVE is on and a project is open, new pipelines appear  
+- 🔐 **Auth via [glab](https://gitlab.com/gitlab-org/cli) only** — no pasting PATs into random env files  
+- 🌍 Open the focused pipeline/job in the browser with `o`  
+- 🧹 **Clean quit** — `q` or Ctrl+C leaves your shell usable  
+
+**Not in MVP** (on purpose): issues, merge requests, source browser, registry, retry/cancel.  
+This is a **CI-only** tool — see the [constitution](doc/arch/memory/constitution.md).
+
+---
+
+## Quick start
+
+### 1) Talk to GitLab with glab
+
+```bash
+# macOS
+brew install glab
+
+glab auth login          # gitlab.com or your self-hosted host
+glab auth status         # sanity check
+```
+
+ciview **only** reads credentials from glab.  
+If glab is missing or not logged in, it exits with a clear **“do this next”** message (exit code `2`).
+
+### 2) Install ciview
+
+**Option A — binary from GitHub Releases** (easiest):
+
+```bash
+# macOS Apple Silicon example — pick the asset for your OS from the latest release
+# https://github.com/farchanjo/ciview/releases
+
+chmod +x ciview-darwin-arm64
+sudo mv ciview-darwin-arm64 /usr/local/bin/ciview
+ciview -h
+```
+
+**Option B — from source** (needs [Bun](https://bun.sh)):
+
+```bash
+git clone https://github.com/farchanjo/ciview.git
+cd ciview
+bun install
+bun run start            # or: make deploy  → /usr/local/bin/ciview (macOS)
+```
+
+### 3) Fly
+
+```bash
+ciview                   # dashboard
+ciview .                 # focus project from git remote
+ciview group/my-project  # focus by path
+```
+
+Press **`?`** inside the app for shortcuts.  
+Quit with **`q`** or **Ctrl+C** (shell-safe).
+
+---
+
+## Keys
+
+| Key | Action |
+|-----|--------|
+| `?` | Help |
+| `j` / `k` | Move cursor (projects or board) — **does not open** |
+| `Enter` | Open project → open job log (or dive into a child pipeline) |
+| `h` / `l` | Move across stages |
+| `/` | Filter projects |
+| `m` | Scope: smart → pinned → all |
+| `p` | Pin / unpin |
+| `r` / `R` | Refresh / toggle LIVE |
+| `o` | Open in browser |
+| `s` `[` `]` | Sidebar show/hide |
+| `f` | Toggle log follow |
+| `Esc` | Close log / go back |
+| `q` | Quit |
+
+Full map:  
+[`keybindings.md` (feature 001)](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/keybindings.md) ·  
+[`keybindings.md` (feature 002)](doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/keybindings.md)
+
+---
+
+## Flow
 
 ```mermaid
 flowchart LR
-  UI[React OpenTUI keys] --> D[dispatch intent]
-  D --> Q["p-queue concurrency 4"]
-  Q --> H[job handlers fetch]
-  H --> S[store.apply]
-  S --> O[RxJS observers]
-  O --> UI
+  A[🚀 Launch] --> B[🔐 glab auth]
+  B --> C[📂 Project list]
+  C --> D[j/k cursor]
+  D --> E[Enter opens project]
+  E --> F[🧱 Stage board]
+  F --> G[Enter job log]
+  F --> H[🔴 Live poll]
+  H --> F
+  G --> I[q / Ctrl+C]
+  F --> I
+  I --> J[✅ Shell clean]
 ```
 
-```text
-UI keys (React)  →  p-queue.add(job)  →  up to 4 concurrent handlers  →  store.apply
-                                                                            ↓
-                                                              RxJS/observers → redraw
-```
+More detail: [`product-overview.md`](doc/arch/functional/product-overview.md).
 
-- **Interactive realtime CLI** — long-lived TUI; keys always live; screen follows stores
-- **Store map** — session, prefs, projects, pipelines, jobs, trace, selection, uiChrome ([`store-map.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/store-map.md))
-- **Queue** — [`p-queue`](https://github.com/sindresorhus/p-queue), **concurrency 4**
-- **Priority** — **user jobs always ahead of poll**
-- **Observers** — React TUI reacts to store / **RxJS**; handlers never paint
-- **No OS Worker threads** in MVP (async slots on Bun’s event loop only)
+---
 
-## :wrench: Stack
+## Stack
 
-| Layer | Choice |
+| Piece | Choice |
 |-------|--------|
 | Runtime | [Bun](https://bun.sh) |
-| Language | TypeScript only |
-| TUI | [OpenTUI](https://opentui.com) + **React** |
-| Queue | `p-queue` (concurrency 4) |
-| Reactive | RxJS (allowed / preferred for streams) |
-| API | GitLab REST v4 |
-| Auth | glab only |
-| Specs | [speckit](https://github.com/) / `doc/arch` |
+| Language | TypeScript |
+| UI | [OpenTUI](https://opentui.com) + React |
+| Work queue | `p-queue` (concurrency 4; your keys beat background poll) |
+| API | GitLab REST v4 (read-only MVP) |
+| Specs | [speckit](https://github.com/) corpus in `doc/arch/` |
 
-## :file_folder: Repository layout
+Architecture notes: [ADR-0002 async queue](doc/arch/adr/0002-async-workers-queue-observer-bun.md) · [ADR-0003 React OpenTUI](doc/arch/adr/0003-react-opentui-typescript-stack.md) · [ADR-0004 board UX](doc/arch/adr/0004-keep-project-sidebar-right-side-is-a-navigable-pipeline.md).
 
-```text
-doc/arch/           # source of truth (constitution, specs, ADRs, tasks)
-src/ciview/         # Bun + OpenTUI React implementation
-  main.tsx          # entry
-  runtime/          # p-queue, handlers, effects
-  state/            # store map
-  ui/               # React panes + Help overlay
-  gitlab/ auth/ …
+---
+
+## Releases
+
+Binaries are built **on a real Mac** and **on a Linux machine over SSH** — not in GitHub CI  
+([why](.github/CI_DISABLED.md)).
+
+| Asset | Built on |
+|-------|----------|
+| `ciview-darwin-arm64` (or x64) | Developer Mac |
+| `ciview-linux-x64` | Linux builder (`root@vm.services` by default) |
+
+Maintainers (one command):
+
+```bash
+make ship              # bump patch + tests + binaries + tag + GitHub Release
+make ship PART=minor
 ```
 
-## :hammer_and_wrench: Run
+See [AGENTS.md](AGENTS.md) and the [Makefile](Makefile).
+
+---
+
+## Develop
 
 ```bash
 bun install
-bun run start              # interactive TUI
-bun run src/ciview/main.tsx .
-bun run src/ciview/main.tsx group/project
-bun test && bun run typecheck
-make deploy                # local binary → /usr/local/bin (macOS codesign)
+make hooks-install     # local git hooks (recommended once per clone)
+bun run start
+bun test
+bun run typecheck
+make check             # tests + types + lint + speckit validate
 ```
 
-Auth is **glab only**. If glab is missing or not logged in, ciview prints:
+Hooks block secrets, keep Conventional Commits, and run checks on push.  
+Skip once with `SKIP_HOOKS=1` if you must.
 
-```text
-1) Install glab:   brew install glab
-2) Authenticate:   glab auth login && glab auth status
-```
-
-In the TUI: press **`?`** for the shortcut help overlay.
-
-## :package: Release binaries (local only — no GitHub Actions)
-
-**CI on GitHub is disabled.** Prefer one command:
-
-```bash
-make ship                 # bump patch + check + binaries + tag + push + gh release
-make ship PART=minor
-make ship PART=1.2.0
-```
-
-| Artifact | Builder |
-|----------|---------|
-| `ciview-darwin-arm64` (or x64) | This Mac |
-| `ciview-linux-x64` | `ssh root@vm.services` (native OpenTUI) |
-
-Piecewise: `make release-binaries` then `make release`.  
-Docs: [AGENTS.md](AGENTS.md), [`.github/CI_DISABLED.md`](.github/CI_DISABLED.md), Makefile.
+---
 
 ## Specs
 
-This repo is **spec-driven**:
+This project is **spec-first**: change the corpus under `doc/arch/`, then code.
+
+| Doc | Why open it |
+|-----|-------------|
+| [Constitution](doc/arch/memory/constitution.md) | Product principles (CI-only, glab, shell-safe exit…) |
+| [Product overview](doc/arch/functional/product-overview.md) | Story of the product |
+| [Feature 001 spec](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/spec.md) | Core cockpit FRs |
+| [Feature 002 spec](doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/spec.md) | Board + stable sidebar |
+| [UX layout](doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md) | What each zone does |
+| [AGENTS.md](AGENTS.md) | Map for humans *and* AI agents |
 
 ```bash
 speckit status
-speckit next
-speckit validate   # must be 0 findings before commits that touch the corpus
+speckit validate    # must stay clean when you touch the corpus
 ```
 
-Feature **001** is implemented under `src/ciview/`.
+---
 
-Key docs:
+## Contributing
 
-| Doc | Path |
-|-----|------|
-| Constitution | [`doc/arch/memory/constitution.md`](doc/arch/memory/constitution.md) |
-| Product overview | [`doc/arch/functional/product-overview.md`](doc/arch/functional/product-overview.md) |
-| Feature spec | [`doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/spec.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/spec.md) |
-| Plan | [`doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/plan.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/plan.md) |
-| Tasks | [`doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/tasks.md`](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/tasks.md) |
-| ADR Bun+OpenTUI | [`doc/arch/adr/0001-….md`](doc/arch/adr/0001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job.md) |
-| ADR async runtime | [`doc/arch/adr/0002-async-workers-queue-observer-bun.md`](doc/arch/adr/0002-async-workers-queue-observer-bun.md) |
-| ADR React UI | [`doc/arch/adr/0003-react-opentui-typescript-stack.md`](doc/arch/adr/0003-react-opentui-typescript-stack.md) |
+1. Read the [constitution](doc/arch/memory/constitution.md) and the active feature under `doc/arch/sdd/`.  
+2. Prefer **spec → code** (`speckit` workflow).  
+3. Keep the product **CI-only**, auth **glab-only**, and commits **Conventional**.  
+4. Don’t add GitHub Actions build workflows unless the project explicitly re-enables them.
 
-## :key: Auth (glab only)
+---
 
-```bash
-# 1) Install (if needed)
-brew install glab
+## FAQ
 
-# 2) Authenticate
-glab auth login
-# self-hosted:
-# glab auth login --hostname git.example.com
+**Does it replace the GitLab UI?**  
+No — it replaces the *tab chaos* for day-to-day CI watching. Open the browser with `o` when you need the full UI.
 
-glab auth status
-```
+**Can I put a token in `.env`?**  
+Not as the primary path. Use `glab auth login`. That keeps secrets out of the repo and out of random shell history.
 
-ciview never asks you to paste a PAT into env for normal use — it reads the
-token glab already stored.
+**Will Ctrl+C trash my terminal?**  
+It shouldn’t. Quit is designed to restore the shell (see FR-27 / [shutdown-flow](doc/arch/sdd/001-gitlab-ci-tui-cockpit-with-project-sidebar-pipeline-and-job/shutdown-flow.md)). If something ancient is stuck, run `reset`.
 
-## :open_book: Documentation
+**Linux binary from my Mac?**  
+Build Linux on a Linux host (`make build-linux` / `make ship`). OpenTUI has native bits — no fake cross-compile.
 
-- [`AGENTS.md`](AGENTS.md) — map for AI agents / automation  
-- [`doc/arch/`](doc/arch/) — full spec corpus  
-
-## :handshake: Contributing
-
-1. Read the constitution and the active feature spec under `doc/arch/`.  
-2. Prefer changing specs first, then code (`speckit` workflow).  
-3. Keep the product **CI-only** and the runtime **async queue/observer** based.  
+---
 
 ## License
 
-License not set yet — will be declared via project metadata before the first
-runtime release.
+Not set yet — will be declared before a broader public packaging push.  
+Until then, treat the repo as source-available for evaluation.
+
+---
+
+Made for people who live in the terminal and still care about green pipelines. 💚  
+Happy shipping!

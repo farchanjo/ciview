@@ -76,7 +76,8 @@ PART           ?= patch
 	build-darwin build-linux release-binaries checksums \
 	release tag push-main ensure-repo \
 	ssh-check remote-bun \
-	bump ship ship-patch ship-minor ship-major
+	bump ship ship-patch ship-minor ship-major \
+	hooks-install hooks-uninstall hooks-status
 
 .DEFAULT_GOAL := help
 
@@ -85,6 +86,8 @@ help: ## Show targets
 	@echo ""
 	@echo "  Dev:"
 	@echo "    make start | test | check | build | sign | deploy | uninstall"
+	@echo "    make hooks-install      enable local githooks/ (core.hooksPath)"
+	@echo "    make hooks-uninstall    restore default .git/hooks"
 	@echo ""
 	@echo "  Ship (one command — preferred):"
 	@echo "    make ship                 bump patch + check + binaries + tag + push + gh release"
@@ -352,6 +355,22 @@ ship-minor:
 
 ship-major:
 	@$(MAKE) ship PART=major
+
+# --- local git hooks (versioned under githooks/) ----------------------------
+
+## Enable versioned hooks: git config core.hooksPath githooks
+hooks-install:
+	@chmod +x scripts/install-hooks.sh githooks/* 2>/dev/null || true
+	@./scripts/install-hooks.sh
+
+## Disable versioned hooks (back to .git/hooks)
+hooks-uninstall:
+	@git config --unset core.hooksPath 2>/dev/null || true
+	@echo "hooks uninstalled (core.hooksPath cleared)"
+
+hooks-status:
+	@echo "core.hooksPath=$$(git config --get core.hooksPath || echo '(default .git/hooks)')"
+	@ls -la githooks/ 2>/dev/null || echo "no githooks/ dir"
 
 clean:
 	rm -rf $(DIST_DIR)

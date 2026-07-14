@@ -66,11 +66,32 @@ make ship-patch           # aliases: ship-minor, ship-major
 - Linux **must** compile on `SSH_TARGET` (`make build-linux` / ship).
 - Binaries live under `dist/release/` (gitignored); only uploaded via `gh release`.
 - Scripts: `scripts/ship.sh`, `scripts/bump-version.mjs`. Makefile wires `ship` / `bump`.
+- After clone: **`make hooks-install`** (versioned hooks in `githooks/`).
+
+## Local git hooks
+
+Hooks live in **`githooks/`** (not `.git/hooks`) via `core.hooksPath`.
+
+```bash
+make hooks-install      # once per clone
+make hooks-status
+make hooks-uninstall    # optional
+```
+
+| Hook | Runs |
+|------|------|
+| `pre-commit` | Block secrets; eslint staged `src/**/*.{ts,tsx}`; typecheck + `bun test` if src/toolchain changes; `speckit validate` if `doc/arch/**` changes |
+| `commit-msg` | Conventional Commits (`feat:`, `fix:`, `chore:`, …) |
+| `pre-push` | Full `make check` before push |
+
+Skip once: `SKIP_HOOKS=1 git commit …` / `SKIP_HOOKS=1 git push …`.  
+Installer: `scripts/install-hooks.sh`.
 
 ## Commands
 
 ```
 bun install
+make hooks-install
 bun run start
 bun test
 bun run typecheck

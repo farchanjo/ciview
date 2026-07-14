@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# ciview local pre-commit — fast gates before commit lands
+# Portable: bash 3.2+ (macOS /bin/bash)
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
+
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  echo "pre-commit: SKIP_HOOKS=1 — skipping"
+  exit 0
+fi
+
+die() { echo "pre-commit: $*" >&2; exit 1; }
+info() { echo "pre-commit: $*"; }
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)"
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# --- secrets / junk that must never be committed ---------------------------
+echo "$STAGED" | while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    .env|.env.*|*/.env|*/.env.*)
+      die "refusing to commit env file: $f"
+      ;;
+    *.pem|*.p12|id_rsa|id_ed25519|*.key)
+      die "refusing to commit key material: $f"
+      ;;
+  esac
+done
+
+# Scan staged diff for high-risk token patterns
+if git diff --cached -U0 | grep -Eiq \
+  '(PRIVATE-TOKEN|GITLAB_TOKEN|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{20,}|BEGIN (RSA |OPENSSH )?PRIVATE KEY)'; then
+  die "possible secret in staged diff — remove token/key before commit"
+fi
+
+SRC_TS=0
+DOC_ARCH=0
+PKG=0
+TS_LIST=""
+
+echo "$STAGED" | while IFS= read -r f; do :; done
+
+# Loop without pipe subshell so flags stick
+OLDIFS=$IFS
+IFS='
+'
+for f in $STAGED; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    src/*)
+      case "$f" in
+        *.ts|*.tsx)
+          SRC_TS=1
+          if [ -f "$f" ]; then
+            if [ -z "$TS_LIST" ]; then TS_LIST="$f"; else TS_LIST="$TS_LIST
+$f"; fi
+          fi
+          ;;
+      esac
+      ;;
+    doc/arch/*) DOC_ARCH=1 ;;
+    package.json|tsconfig.json|eslint.config.js|bun.lock) PKG=1 ;;
+  esac
+done
+IFS=$OLDIFS
+
+# --- eslint on staged TS/TSX under src/ ------------------------------------
+if [ -n "$TS_LIST" ]; then
+  COUNT=$(echo "$TS_LIST" | grep -c . || true)
+  info "eslint ($COUNT file(s))"
+  # shellcheck disable=SC2086
+  if command -v bunx >/dev/null 2>&1; then
+    echo "$TS_LIST" | tr '\n' '\0' | xargs -0 bunx eslint
+  else
+    bun run lint
+  fi
+fi
+
+# --- typecheck + tests when TS or toolchain changes ------------------------
+if [ "$SRC_TS" -eq 1 ] || [ "$PKG" -eq 1 ]; then
+  info "typecheck"
+  bun run typecheck
+  info "bun test"
+  bun test
+fi
+
+# --- speckit when corpus changes -------------------------------------------
+if [ "$DOC_ARCH" -eq 1 ]; then
+  if command -v speckit >/dev/null 2>&1; then
+    info "speckit validate (doc/arch changed)"
+    speckit validate
+  else
+    info "speckit not on PATH — skip validate"
+  fi
+fi
+
+info "ok"

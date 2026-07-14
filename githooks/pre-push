@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ciview local pre-push — full check before remote update
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
+
+if [[ "${SKIP_HOOKS:-0}" == "1" ]]; then
+  echo "pre-push: SKIP_HOOKS=1 — skipping"
+  exit 0
+fi
+
+# stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+# If pushing tags only, still run checks once.
+PUSHING_SOMETHING=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "${local_ref:-}" ]] && continue
+  # delete
+  if [[ "$local_sha" =~ ^0+$ ]]; then
+    continue
+  fi
+  PUSHING_SOMETHING=1
+done
+
+if [[ $PUSHING_SOMETHING -eq 0 ]]; then
+  # no refs with commits (e.g. delete-only) — allow
+  exit 0
+fi
+
+echo "pre-push: make check (tests + typecheck + lint + speckit validate)"
+if [[ -f Makefile ]] && command -v make >/dev/null 2>&1; then
+  make check
+else
+  bun test
+  bun run typecheck
+  bun run lint
+  command -v speckit >/dev/null && speckit validate || true
+fi
+
+echo "pre-push: ok"
