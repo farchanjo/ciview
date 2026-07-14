@@ -1,6 +1,6 @@
 {
   "name": "ciview",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Terminal CI cockpit for GitLab — OpenTUI + Bun",
   "type": "module",
   "private": true,

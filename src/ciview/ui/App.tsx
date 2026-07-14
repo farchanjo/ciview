@@ -17,10 +17,19 @@ import { useStore } from "./hooks/useStore.ts";
 import {
   boardJobsInStage,
   boardStages,
-  effectiveSidebarVisible,
   PipelineGraph,
 } from "./panes/PipelineGraph.tsx";
-import { JobLogDrawer, scrollLog } from "./panes/JobLogDrawer.tsx";
+import { JobLogDrawer } from "./panes/JobLogDrawer.tsx";
+import {
+  clampLogScroll,
+  cycleJobLogMode,
+  jumpLogEdge,
+  jumpLogError,
+  scrollLog,
+  scrollLogFullPage,
+  scrollLogPage,
+} from "../util/logNav.ts";
+import { computeLayoutBudget, effectiveSidebarVisible } from "../util/layoutBudget.ts";
 import { ProjectSidebar, projectViewFlat } from "./panes/ProjectSidebar.tsx";
 
 export interface AppProps {
@@ -50,15 +59,21 @@ export function App({ stores, queue, onQuit }: AppProps) {
   useStore(stores.pipelines);
   useStore(stores.jobs);
 
-  // FR-12: track terminal width for responsive collapse
+  // FR-40/45: track terminal size; clamp log scroll on resize
   useEffect(() => {
     const sync = () => {
       const w =
         typeof renderer.width === "number" && renderer.width > 0
           ? renderer.width
           : (process.stdout.columns ?? 120);
-      if (stores.chrome.get().termWidth !== w) {
-        stores.chrome.patch({ termWidth: w });
+      const h =
+        typeof renderer.height === "number" && renderer.height > 0
+          ? renderer.height
+          : (process.stdout.rows ?? 40);
+      const ch = stores.chrome.get();
+      if (ch.termWidth !== w || ch.termHeight !== h) {
+        stores.chrome.patch({ termWidth: w, termHeight: h });
+        clampLogScroll(stores);
       }
     };
     sync();
@@ -69,11 +84,14 @@ export function App({ stores, queue, onQuit }: AppProps) {
     };
   }, [renderer, stores]);
 
-  const showSidebar = effectiveSidebarVisible(
-    chrome.sidebarVisible,
-    chrome.sidebarForce ?? null,
-    chrome.termWidth,
-  );
+  const layoutBudget = computeLayoutBudget({
+    termWidth: chrome.termWidth,
+    termHeight: chrome.termHeight,
+    sidebarPrefVisible: chrome.sidebarVisible,
+    sidebarForce: chrome.sidebarForce,
+    stageCount: 0,
+  });
+  const showSidebar = layoutBudget.sidebarVisibleEffective;
 
   useKeyboard((key) => {
     const ch = stores.chrome.get();
@@ -258,13 +276,71 @@ export function App({ stores, queue, onQuit }: AppProps) {
       return;
     }
 
-    if (key.name === "f" && ch.logOpen) {
-      const next = !ch.logFollow;
-      stores.chrome.patch({
-        logFollow: next,
-        ...(next ? { logScrollFromBottom: 0 } : {}),
-      });
-      return;
+    // Job log modal — capture keys while open (overlay, not a layout pane)
+    if (ch.logOpen) {
+      if (key.name === "f") {
+        const next = !ch.logFollow;
+        stores.chrome.patch({
+          logFollow: next,
+          ...(next ? { logScrollFromBottom: 0 } : {}),
+        });
+        return;
+      }
+      if (key.name === "e" && !key.shift && !key.ctrl) {
+        cycleJobLogMode(stores);
+        return;
+      }
+      if (key.name === "n" && !key.shift) {
+        jumpLogError(stores, 1);
+        return;
+      }
+      if (key.name === "n" && key.shift) {
+        jumpLogError(stores, -1);
+        return;
+      }
+      if (key.name === "g" && !key.shift) {
+        jumpLogEdge(stores, "top");
+        return;
+      }
+      if (key.name === "g" && key.shift) {
+        jumpLogEdge(stores, "end");
+        return;
+      }
+      if (key.name === "j" || key.name === "down") {
+        scrollLog(stores, 1);
+        return;
+      }
+      if (key.name === "k" || key.name === "up") {
+        scrollLog(stores, -1);
+        return;
+      }
+      // PageUp / PageDown — full viewport (log view navigation)
+      if (key.name === "pagedown" || key.name === "kppagedown") {
+        scrollLogFullPage(stores, 1);
+        return;
+      }
+      if (key.name === "pageup" || key.name === "kppageup") {
+        scrollLogFullPage(stores, -1);
+        return;
+      }
+      // half-page: Ctrl+d / Ctrl+u or space / b
+      if (key.name === "d" && key.ctrl) {
+        scrollLogPage(stores, 1);
+        return;
+      }
+      if (key.name === "u" && key.ctrl) {
+        scrollLogPage(stores, -1);
+        return;
+      }
+      if (key.name === "space" || key.raw === " ") {
+        scrollLogPage(stores, 1);
+        return;
+      }
+      if (key.name === "b" && !key.ctrl) {
+        scrollLogPage(stores, -1);
+        return;
+      }
+      // Esc handled below; o/r/q still available
     }
 
     // Movement
@@ -334,10 +410,17 @@ export function App({ stores, queue, onQuit }: AppProps) {
         {showSidebar ? <ProjectSidebar stores={stores} /> : null}
         <box style={{ flexDirection: "column", flexGrow: 1, height: "100%" }}>
           <PipelineGraph stores={stores} />
-          <JobLogDrawer stores={stores} />
         </box>
       </box>
-      {chrome.helpOpen ? <HelpOverlay scroll={chrome.helpScroll} /> : null}
+      {/* Modal overlays — outside flex so they never break board layout */}
+      <JobLogDrawer stores={stores} />
+      {chrome.helpOpen ? (
+        <HelpOverlay
+          scroll={chrome.helpScroll}
+          termWidth={chrome.termWidth}
+          termHeight={chrome.termHeight}
+        />
+      ) : null}
     </box>
   );
 }

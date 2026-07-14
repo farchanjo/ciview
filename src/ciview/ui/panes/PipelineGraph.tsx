@@ -1,8 +1,11 @@
 import type { Job, Pipeline } from "../../gitlab/types.ts";
 import type { RootStores } from "../../state/root.ts";
+import { computeLayoutBudget } from "../../util/layoutBudget.ts";
 import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
 import { LoadingLine } from "../chrome/LoadingLine.tsx";
 import { useStore } from "../hooks/useStore.ts";
+
+export { effectiveSidebarVisible } from "../../util/layoutBudget.ts";
 
 export function fmtDur(sec?: number): string {
   if (sec == null || Number.isNaN(sec)) return "";
@@ -29,14 +32,6 @@ function jobsInStage(jobs: Job[], stage: string): Job[] {
   return jobs.filter((j) => j.stage === stage);
 }
 
-/** Column width scales with terminal width for FR-12 readability. */
-function stageColWidth(termWidth: number, stageCount: number, sidebarOn: boolean): number {
-  const sidebar = sidebarOn ? 30 : 0;
-  const usable = Math.max(40, termWidth - sidebar - 4);
-  if (stageCount <= 0) return 18;
-  return Math.max(14, Math.min(22, Math.floor(usable / Math.min(stageCount, 6))));
-}
-
 export function PipelineGraph(props: { stores: RootStores }) {
   const pipelines = useStore(props.stores.pipelines);
   const jobsState = useStore(props.stores.jobs);
@@ -48,12 +43,16 @@ export function PipelineGraph(props: { stores: RootStores }) {
   const stripFocus = chrome.focusedPane === "pipeline_strip";
   const boardFocus = chrome.focusedPane === "stage_board";
   const board = chrome.board;
-  const sidebarOn = effectiveSidebarVisible(
-    chrome.sidebarVisible,
-    chrome.sidebarForce,
-    chrome.termWidth,
-  );
-  const colW = stageColWidth(chrome.termWidth, jobsState.stages.length, sidebarOn);
+  const budget = computeLayoutBudget({
+    termWidth: chrome.termWidth,
+    termHeight: chrome.termHeight,
+    sidebarPrefVisible: chrome.sidebarVisible,
+    sidebarForce: chrome.sidebarForce,
+    stageCount: jobsState.stages.length,
+  });
+  const sidebarOn = budget.sidebarVisibleEffective;
+  const colW = budget.stageColWidth;
+  const stripCount = budget.stripRows;
   const childDepth = chrome.pipelineStack.length;
 
   if (sel.projectId == null) {
@@ -65,7 +64,8 @@ export function PipelineGraph(props: { stores: RootStores }) {
           borderColor: "#30363d",
           flexDirection: "column",
           flexGrow: 1,
-          height: "100%",
+          flexShrink: 1,
+          minHeight: 3,
           padding: 1,
         }}
       >
@@ -76,12 +76,13 @@ export function PipelineGraph(props: { stores: RootStores }) {
 
   const pipeItems = pipelines.items;
   const stages = jobsState.stages;
-  // FR-12: fewer strip rows + narrower board on tight terminals
-  const stripCount = chrome.termWidth < 80 ? 2 : chrome.termWidth < 100 ? 3 : 5;
   const graphTitle =
     childDepth > 0
       ? ` Graph · ${openProj?.pathWithNamespace ?? "?"} · child×${childDepth} Esc↑ `
-      : ` Graph · ${openProj?.pathWithNamespace ?? "?"} `;
+      : ` Graph · ${openProj?.pathWithNamespace ?? "?"} · ${budget.density} `;
+
+  // Strip box height: title row + stripCount lines + padding; cap by budget
+  const stripBoxHeight = Math.min(2 + stripCount, Math.max(3, stripCount + 2));
 
   return (
     <box
@@ -91,7 +92,8 @@ export function PipelineGraph(props: { stores: RootStores }) {
         borderColor: stripFocus || boardFocus ? "#58a6ff" : "#30363d",
         flexDirection: "column",
         flexGrow: 1,
-        height: "100%",
+        flexShrink: 1,
+        minHeight: 5,
       }}
     >
       <box
@@ -100,7 +102,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
           border: true,
           borderColor: stripFocus ? "#58a6ff" : "#21262d",
           flexDirection: "column",
-          height: Math.min(8, 3 + stripCount),
+          height: stripBoxHeight,
           flexShrink: 0,
         }}
       >
@@ -115,7 +117,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
             pipeline={p}
             active={i === board.pipelineIndex && stripFocus}
             selected={p.id === sel.pipelineId}
-            maxLen={Math.max(36, chrome.termWidth - (sidebarOn ? 36 : 8))}
+            maxLen={Math.max(24, chrome.termWidth - (sidebarOn ? budget.sidebarWidth + 6 : 8))}
           />
         ))}
         {pipeItems.length > stripCount ? (
@@ -130,6 +132,8 @@ export function PipelineGraph(props: { stores: RootStores }) {
           borderColor: boardFocus ? "#58a6ff" : "#21262d",
           flexDirection: "row",
           flexGrow: 1,
+          flexShrink: 1,
+          minHeight: 3,
         }}
       >
         {jobsState.status === "loading" ? (
@@ -208,18 +212,6 @@ function PipelineStripRow(props: {
       {line}
     </text>
   );
-}
-
-export function effectiveSidebarVisible(
-  prefVisible: boolean,
-  force: boolean | null | undefined,
-  termWidth: number,
-): boolean {
-  if (force === true) return true;
-  if (force === false) return false;
-  // FR-12: collapse sidebar under 100 columns unless forced
-  if (termWidth > 0 && termWidth < 100) return false;
-  return prefVisible;
 }
 
 export function boardStages(stores: RootStores) {

@@ -4,7 +4,7 @@ Canonical machine-readable map. Path-anchored. Prune on drift.
 
 ## Project
 
-ciview: GitLab CI TUI (sidebar, stage board, on-demand log). Bun + TypeScript + OpenTUI React + p-queue (4) + RxJS. Auth glab-only. Corpus doc/arch. Code src/ciview.
+ciview: GitLab CI TUI (sidebar, stage board, smart log modal). Bun + TypeScript + OpenTUI React + p-queue (4) + RxJS. Auth glab-only. Corpus doc/arch. Code src/ciview. Layout via pure `layoutBudget` (termW×termH).
 
 ## Architecture
 
@@ -12,7 +12,7 @@ doc/arch: memory, functional, domain/cli-surface, operations, slo, adr, schemas,
 
 src/ciview layers: auth, cli, config, git, gitlab, nav, poll, projects, runtime, state, ui, util.
 
-Key modules: src/ciview/main.tsx, src/ciview/nav/openProject.ts, src/ciview/ui/panes/PipelineGraph.tsx, src/ciview/ui/panes/JobLogDrawer.tsx, src/ciview/runtime/queue.ts, src/ciview/auth/resolve.ts.
+Key modules: src/ciview/main.tsx, src/ciview/nav/openProject.ts, src/ciview/ui/panes/PipelineGraph.tsx, src/ciview/ui/panes/JobLogDrawer.tsx, src/ciview/util/layoutBudget.ts, src/ciview/util/smartLog.ts, src/ciview/runtime/queue.ts, src/ciview/auth/resolve.ts.
 
 ## Build & release (local only — NO GitHub Actions CI)
 

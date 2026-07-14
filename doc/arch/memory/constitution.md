@@ -8,7 +8,7 @@ Foundational principles for **ciview** (Bun + OpenTUI GitLab CI TUI).
 |---|---|---|---|---|
 | P1 | CI-only product | Pipelines/jobs/logs only | Issues/MR/registry hub | `doc/arch/functional/product-overview.md` |
 | P2 | Spec-first | `doc/arch` > code | Impl without feature phase | SDD |
-| P3 | Terminal board UX | Sidebar + stage board; log on demand | Always-on 4-column thrash | ADR-0004 |
+| P3 | Terminal board UX | Sidebar + stage board; log on demand (modal, adaptive) | Always-on 4-column thrash | ADR-0004, ADR-0005 |
 | P4 | Read-mostly MVP | View/nav/log/open only | Retry/cancel without feature | security |
 | P5 | glab-only auth | Token/host from glab; exit `2` if missing | Env PAT primary path | FR-01 |
 | P6 | Lazy load | Master–detail fetches | Full-org fan-out | performance |
@@ -32,7 +32,7 @@ Out: issues, MR authoring, source browser, registry admin, editing `.gitlab-ci.y
 
 ### P3 — Terminal board UX
 
-Left: project sidebar. Right: pipeline strip + stage board. Job log drawer only after Enter on job. Cursor ≠ open (FR-35).
+Left: project sidebar. Right: pipeline strip + stage board. Job log **modal** only after Enter on job (layout budget from term size; ADR-0005). Cursor ≠ open (FR-35).
 
 ### P4 — Read-mostly MVP
 

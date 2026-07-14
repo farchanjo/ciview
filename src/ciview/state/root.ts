@@ -9,6 +9,7 @@ import type {
   StageGroup,
 } from "../gitlab/types.ts";
 import type { ProjectScope } from "../projects/filter.ts";
+import type { LogViewMode } from "../util/smartLog.ts";
 import { createStore } from "./createStore.ts";
 
 export interface SessionState {
@@ -59,16 +60,22 @@ export interface UiChromeState {
   logFollow: boolean;
   /** Lines from bottom when following; increases when user scrolls up (pauses follow). */
   logScrollFromBottom: number;
+  /** Smart log view: condensed failures / errors-only / full. */
+  logMode: LogViewMode;
+  /** Cursor into error hits for n/N jump (index into errorViewIndices). */
+  logErrorCursor: number;
   sidebarVisible: boolean;
   /** User override; when null, layout decides from terminal width. */
   sidebarForce?: boolean | null;
   helpOpen: boolean;
   helpScroll: number;
-  /** Feature 002: log drawer */
+  /** Feature 002: log modal */
   logOpen: boolean;
   board: BoardCursor;
   /** Terminal width for responsive collapse (updated by UI). */
   termWidth: number;
+  /** Terminal height for modal viewport sizing. */
+  termHeight: number;
   /**
    * Parent pipeline ids when diving into child pipelines via bridges (FR-13).
    * Top of stack is nearest parent; empty when at root pipeline of the project.
@@ -141,6 +148,8 @@ export function createRootStores(initialPrefs: Prefs) {
       filterDraft: "",
       logFollow: true,
       logScrollFromBottom: 0,
+      logMode: "smart",
+      logErrorCursor: 0,
       sidebarVisible: initialPrefs.sidebarVisible,
       sidebarForce: null,
       helpOpen: false,
@@ -148,6 +157,7 @@ export function createRootStores(initialPrefs: Prefs) {
       logOpen: false,
       board: { pipelineIndex: 0, stageIndex: 0, jobIndex: 0 },
       termWidth: 120,
+      termHeight: 40,
       pipelineStack: [],
     }),
     queueMeta: createStore<QueueMetaState>({

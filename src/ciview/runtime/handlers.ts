@@ -11,6 +11,7 @@ import {
 } from "../gitlab/map.ts";
 import { isActiveStatus } from "../gitlab/types.ts";
 import type { RootStores } from "../state/root.ts";
+import { parkLogOnFirstError } from "../util/logNav.ts";
 import { sanitizeTrace, tailLines } from "../util/sanitizeTrace.ts";
 import type { JobHandler } from "./queue.ts";
 import type { JobRequest } from "./jobs.ts";
@@ -215,11 +216,14 @@ export function createHandlers(
       // preserve scroll if user scrolled up; follow resets to bottom only when follow on
       stores.trace.set({
         jobId,
-        text: tailLines(sanitizeTrace(text), 800),
+        text: tailLines(sanitizeTrace(text), 2000),
         status: "ready",
         error: null,
       });
-      if (stores.chrome.get().logFollow) {
+      // Smart park on first error (modal); silent poll only follows when follow on
+      if (!silent) {
+        parkLogOnFirstError(stores);
+      } else if (stores.chrome.get().logFollow) {
         stores.chrome.patch({ logScrollFromBottom: 0 });
       }
     } catch (e) {

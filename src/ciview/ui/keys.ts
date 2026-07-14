@@ -34,8 +34,13 @@ export const KEY_BINDINGS: KeyBinding[] = [
   { key: "Esc", label: "Close log / back to projects", category: "Graph" },
   { key: "2/3", label: "Focus strip / board", category: "Graph" },
 
-  { key: "Enter on job", label: "Show log / dive into bridge child", category: "Log" },
+  { key: "Enter on job", label: "Open smart log modal / dive into bridge", category: "Log" },
   { key: "j/k", label: "Scroll log (up pauses follow)", category: "Log" },
+  { key: "n/N", label: "Next / previous error in log", category: "Log" },
+  { key: "e", label: "Cycle log mode smart→errors→all", category: "Log" },
+  { key: "g/G", label: "Log top / end (follow)", category: "Log" },
+  { key: "PgUp/PgDn", label: "Full page up / down in log", category: "Log" },
+  { key: "Space/b", label: "Half page down / up in log", category: "Log" },
   { key: "Esc", label: "Close log / pop child pipeline", category: "Log" },
   { key: "f", label: "Toggle log follow (on → jump bottom)", category: "Log" },
 
@@ -45,7 +50,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export const STATUS_HINT =
-  "?:help  j/k  Enter  h/l board  log j/k  f  Esc  / m p  r R  q";
+  "?:help  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m p  r R  q";
 
 export function bindingsByCategory(): Map<KeyCategory, KeyBinding[]> {
   const map = new Map<KeyCategory, KeyBinding[]>();

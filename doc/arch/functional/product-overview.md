@@ -17,8 +17,9 @@ subcommands; watching a build “happen” and jumping project → pipeline → 
 log is slow.
 
 Outcome: one keyboard-driven TUI session with a **project sidebar** and a
-**pipeline stage board** on the right; job logs open only on demand (feature
-002). Live poll updates the board without navigation thrash.
+**pipeline stage board** on the right; job logs open only on demand as a
+**smart full-viewport modal** (features 002–003). Geometry scales with terminal
+size via a pure layout budget. Live poll updates the board without thrash.
 
 ## Actors
 
@@ -59,13 +60,15 @@ flowchart LR
    **j/k = cursor only**; **Enter = open project**.
 2. **Pipeline graph** (right) — pipeline strip + **stage board** (columns =
    stages, cells = jobs). Navigate without opening logs.
-3. **Job log drawer** — only after Enter on a job; Esc closes.
+3. **Job log modal** — only after Enter on a job; smart/errors/all modes;
+   Esc closes. Overlay does not reflow the board (ADR-0005 / feature 003).
 4. **Exit** — `q` / Ctrl+c / SIGTERM: ordered FR-27 teardown so the **shell
    does not break** (see `shutdown-flow.md`).
 
 Auth is **glab only**. See
-`doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md`
-and ADR-0004.
+`doc/arch/sdd/002-keep-project-sidebar-right-side-is-a-navigable-pipeline/ux-layout.md`,
+`doc/arch/sdd/003-adaptive-terminal-layout-smart-job-log-modal-1-compute-all/ux-layout.md`,
+ADR-0004, and ADR-0005.
 
 ## CLI entry points (product)
 

@@ -1,5 +1,6 @@
 import { buildProjectView } from "../../projects/filter.ts";
 import type { RootStores } from "../../state/root.ts";
+import { computeLayoutBudget } from "../../util/layoutBudget.ts";
 import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
 import { LoadingLine } from "../chrome/LoadingLine.tsx";
 import { useStore } from "../hooks/useStore.ts";
@@ -9,6 +10,17 @@ export function ProjectSidebar(props: { stores: RootStores }) {
   const chrome = useStore(props.stores.chrome);
   const prefs = useStore(props.stores.prefs);
   const sel = useStore(props.stores.selection);
+  const jobs = useStore(props.stores.jobs);
+
+  const budget = computeLayoutBudget({
+    termWidth: chrome.termWidth,
+    termHeight: chrome.termHeight,
+    sidebarPrefVisible: chrome.sidebarVisible,
+    sidebarForce: chrome.sidebarForce,
+    stageCount: jobs.stages.length,
+  });
+  const sideW = Math.max(18, budget.sidebarWidth || 28);
+  const lineMax = Math.max(12, sideW - 2);
 
   const query =
     chrome.filterActive && chrome.focusedPane === "projects"
@@ -28,22 +40,24 @@ export function ProjectSidebar(props: { stores: RootStores }) {
 
   return (
     <box
-      title={title.slice(0, 36)}
+      title={title.slice(0, Math.max(12, sideW - 2))}
       style={{
         border: true,
         borderColor,
         flexDirection: "column",
-        width: 30,
+        width: sideW,
         flexGrow: 0,
         flexShrink: 0,
         height: "100%",
       }}
     >
-      <text fg="#6e7681">j/k cursor · Enter open · / m p</text>
+      <text fg="#6e7681">j/k · Enter · / m p</text>
       {projects.status === "loading" && projects.items.length === 0 ? (
         <LoadingLine label="loading projects…" />
       ) : null}
-      {projects.error ? <text fg="#f85149">{projects.error.slice(0, 28)}</text> : null}
+      {projects.error ? (
+        <text fg="#f85149">{projects.error.slice(0, lineMax)}</text>
+      ) : null}
       {projects.status !== "loading" && view.flat.length === 0 ? (
         <text fg="#8b949e">
           {query.trim()
@@ -57,8 +71,10 @@ export function ProjectSidebar(props: { stores: RootStores }) {
         <box key={section.id} style={{ flexDirection: "column" }}>
           {section.items.length > 0 || section.id === "rest" ? (
             <text fg="#58a6ff">
-              ── {section.title}
-              {section.items.length ? ` (${section.items.length})` : ""} ──
+              {`── ${section.title}${section.items.length ? ` (${section.items.length})` : ""} ──`.slice(
+                0,
+                lineMax,
+              )}
             </text>
           ) : null}
           {section.items.length === 0 && section.id === "rest" ? (
@@ -69,9 +85,8 @@ export function ProjectSidebar(props: { stores: RootStores }) {
             const isCursor = flatIdx === chrome.projectCursor && focused;
             const isOpen = p.id === sel.projectId;
             const prefix = p.pinned ? "★" : isOpen ? "●" : "·";
-            // FR-02: CI pulse glyph of latest known pipeline status
             const pulse = statusGlyph(p.pulseStatus);
-            const line = `${prefix}${pulse} ${p.pathWithNamespace}`.slice(0, 28);
+            const line = `${prefix}${pulse} ${p.pathWithNamespace}`.slice(0, lineMax);
             return (
               <text
                 key={p.id}

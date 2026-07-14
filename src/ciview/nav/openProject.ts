@@ -63,6 +63,8 @@ export function openJobLog(stores: RootStores, queue: JobQueue, jobId: number): 
     focusedPane: "job_log",
     logScrollFromBottom: 0,
     logFollow: true,
+    logErrorCursor: 0,
+    // keep current logMode (default smart) so re-open remembers preference
   });
 
   // Bridges without downstream — drawer message only
