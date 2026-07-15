@@ -1,15 +1,15 @@
+import type { AxiosInstance } from "axios";
+import { logger } from "../util/logger.ts";
+import { applyAuthToHttp, createGitLabHttp } from "./http.ts";
 import type { AuthResolved } from "./types.ts";
-
-export type FetchFn = typeof fetch;
 
 export class GitLabClient {
   private auth: AuthResolved;
+  private http: AxiosInstance;
 
-  constructor(
-    auth: AuthResolved,
-    private readonly fetchFn: FetchFn = fetch,
-  ) {
+  constructor(auth: AuthResolved, httpClient?: AxiosInstance) {
     this.auth = auth;
+    this.http = httpClient ?? createGitLabHttp(auth);
   }
 
   get host(): string {
@@ -19,31 +19,56 @@ export class GitLabClient {
   /** Swap credentials when the operator picks another glab host. */
   setAuth(auth: AuthResolved): void {
     this.auth = auth;
+    applyAuthToHttp(this.http, auth);
   }
 
-  private apiUrl(path: string): string {
-    const base = this.auth.host.replace(/\/$/, "");
+  /** Test / DI hook. */
+  setHttp(httpClient: AxiosInstance): void {
+    this.http = httpClient;
+  }
+
+  private async request<T>(
+    path: string,
+    init?: { signal?: AbortSignal; responseType?: "json" | "text" },
+  ): Promise<T> {
     const p = path.startsWith("/") ? path : `/${path}`;
-    return `${base}/api/v4${p}`;
-  }
-
-  private async request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
-    const res = await this.fetchFn(this.apiUrl(path), {
-      ...init,
-      headers: {
-        "PRIVATE-TOKEN": this.auth.token,
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`GitLab ${res.status} ${path}: ${body.slice(0, 200)}`);
+    try {
+      const res = await this.http.get(p, {
+        signal: init?.signal,
+        responseType: init?.responseType === "text" ? "text" : "json",
+        headers:
+          init?.responseType === "text"
+            ? { Accept: "text/plain" }
+            : undefined,
+      });
+      if (res.status === 204) return undefined as T;
+      if (res.status < 200 || res.status >= 300) {
+        const body =
+          typeof res.data === "string"
+            ? res.data
+            : res.data != null
+              ? JSON.stringify(res.data)
+              : "";
+        const err = new Error(`GitLab ${res.status} ${path}: ${body.slice(0, 200)}`);
+        if (res.status >= 500) {
+          logger.error("gitlab_http_error", { status: res.status, path: p });
+        } else if (res.status === 429) {
+          logger.warn("gitlab_rate_limit", { status: res.status, path: p });
+        }
+        throw err;
+      }
+      return res.data as T;
+    } catch (e) {
+      if ((e as Error)?.name === "CanceledError" || (e as Error)?.name === "AbortError") {
+        const abort = new Error("Aborted");
+        abort.name = "AbortError";
+        throw abort;
+      }
+      if (axiosIsTimeout(e)) {
+        logger.warn("gitlab_timeout", { path: p });
+      }
+      throw e;
     }
-    if (res.status === 204) return undefined as T;
-    const ct = res.headers.get("content-type") ?? "";
-    if (ct.includes("json")) return (await res.json()) as T;
-    return (await res.text()) as T;
   }
 
   /**
@@ -80,17 +105,11 @@ export class GitLabClient {
   }
 
   async jobTrace(projectId: number, jobId: number, signal?: AbortSignal): Promise<string> {
-    const res = await this.fetchFn(this.apiUrl(`/projects/${projectId}/jobs/${jobId}/trace`), {
+    const text = await this.request<string>(`/projects/${projectId}/jobs/${jobId}/trace`, {
       signal,
-      headers: {
-        "PRIVATE-TOKEN": this.auth.token,
-        Accept: "text/plain",
-      },
+      responseType: "text",
     });
-    if (!res.ok) {
-      throw new Error(`GitLab ${res.status} job trace`);
-    }
-    return await res.text();
+    return typeof text === "string" ? text : String(text ?? "");
   }
 
   async latestPipeline(projectId: number, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
@@ -100,4 +119,13 @@ export class GitLabClient {
     );
     return list[0] ?? null;
   }
+}
+
+function axiosIsTimeout(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e != null &&
+    "code" in e &&
+    (e as { code?: string }).code === "ECONNABORTED"
+  );
 }

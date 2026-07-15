@@ -12,8 +12,9 @@ import {
   openJobLog,
   openProject,
   popChildPipeline,
+  previewProjectUnderCursor,
 } from "../nav/openProject.ts";
-import { cycleScope } from "../projects/filter.ts";
+import { cycleRecentMode, cycleScope } from "../projects/filter.ts";
 import type { JobQueue } from "../runtime/queue.ts";
 import type { RootStores } from "../state/root.ts";
 import { openUrl } from "../util/openUrl.ts";
@@ -310,6 +311,24 @@ export function App({ stores, queue, client, onQuit }: AppProps) {
       return;
     }
 
+    // y: RECENT mode activity ↔ opened
+    if (key.name === "y" && !key.shift && !key.ctrl && ch.focusedPane === "projects") {
+      const next = cycleRecentMode(stores.prefs.get().recentMode);
+      stores.prefs.patch({ recentMode: next });
+      stores.chrome.patch({ projectCursor: 0 });
+      void queue.enqueue({ kind: "SavePrefs", key: "prefs:save", band: "idle" });
+      return;
+    }
+
+    // x: expand RECENT 10 ↔ 20
+    if (key.name === "x" && !key.shift && !key.ctrl && ch.focusedPane === "projects") {
+      stores.chrome.patch({
+        recentExpanded: !ch.recentExpanded,
+        projectCursor: 0,
+      });
+      return;
+    }
+
     if (key.raw === "/") {
       stores.chrome.patch({
         filterActive: true,
@@ -427,11 +446,11 @@ export function App({ stores, queue, client, onQuit }: AppProps) {
       return;
     }
     if (key.name === "g" && !key.shift) {
-      jumpProjects(stores, "top");
+      jumpProjects(stores, queue, "top");
       return;
     }
     if (key.name === "g" && key.shift) {
-      jumpProjects(stores, "bottom");
+      jumpProjects(stores, queue, "bottom");
       return;
     }
 
@@ -501,7 +520,12 @@ export function App({ stores, queue, client, onQuit }: AppProps) {
   );
 }
 
-/** j/k/h/l — projects: cursor only; board: navigate without log. */
+/**
+ * j/k/h/l navigation.
+ * Projects: move cursor + select project (right pane updates like pipeline strip);
+ * RECENT only changes on Enter (pushRecent), not on j/k.
+ * Pipeline strip / board: navigate in place — Enter does not change focus panes.
+ */
 function move(stores: RootStores, queue: JobQueue, dir: "up" | "down" | "left" | "right") {
   const ch = stores.chrome.get();
 
@@ -512,7 +536,7 @@ function move(stores: RootStores, queue: JobQueue, dir: "up" | "down" | "left" |
     const delta = dir === "down" ? 1 : -1;
     const next = Math.max(0, Math.min(items.length - 1, ch.projectCursor + delta));
     stores.chrome.patch({ projectCursor: next });
-    // FR-35: NO openProject, NO pushRecent, NO LoadPipelines
+    previewProjectUnderCursor(stores, queue);
     return;
   }
 
@@ -580,23 +604,25 @@ function move(stores: RootStores, queue: JobQueue, dir: "up" | "down" | "left" |
   }
 }
 
-function jumpProjects(stores: RootStores, where: "top" | "bottom") {
+function jumpProjects(stores: RootStores, queue: JobQueue, where: "top" | "bottom") {
   if (stores.chrome.get().focusedPane !== "projects") return;
   const items = filteredProjects(stores);
   if (items.length === 0) return;
   stores.chrome.patch({
     projectCursor: where === "top" ? 0 : items.length - 1,
   });
+  previewProjectUnderCursor(stores, queue);
 }
 
 function onEnter(stores: RootStores, queue: JobQueue) {
   const ch = stores.chrome.get();
   if (ch.focusedPane === "projects") {
+    // Confirm open + record RECENT; stay on projects (graph already follows j/k).
     openProject(stores, queue);
     return;
   }
   if (ch.focusedPane === "pipeline_strip") {
-    stores.chrome.patch({ focusedPane: "stage_board" });
+    // Pipeline already selected via j/k — do not jump focus to stage board.
     return;
   }
   if (ch.focusedPane === "stage_board") {

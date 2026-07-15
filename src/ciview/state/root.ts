@@ -90,6 +90,8 @@ export interface UiChromeState {
    * Quit with q still works.
    */
   hostPickerRequired: boolean;
+  /** RECENT section shows 20 instead of 10. */
+  recentExpanded: boolean;
 }
 
 export interface QueueMetaState {
@@ -171,6 +173,7 @@ export function createRootStores(initialPrefs: Prefs) {
       hostPickerOpen: false,
       hostPickerCursor: 0,
       hostPickerRequired: false,
+      recentExpanded: false,
     }),
     queueMeta: createStore<QueueMetaState>({
       inflight: [],

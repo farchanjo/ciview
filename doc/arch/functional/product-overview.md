@@ -57,7 +57,7 @@ flowchart LR
 ### Interaction model (target UX — feature 002)
 
 1. **Projects** (left sidebar) — smart/pinned/all, filter, pins, recent;
-   **j/k = cursor only**; **Enter = open project**.
+   **j/k = browse + load graph** (no RECENT change); **Enter = confirm + RECENT**.
 2. **Pipeline graph** (right) — pipeline strip + **stage board** (columns =
    stages, cells = jobs). Navigate without opening logs.
 3. **Job log modal** — only after Enter on a job; smart/errors/all modes;

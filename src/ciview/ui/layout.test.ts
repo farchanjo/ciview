@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Prefs } from "../config/prefs.ts";
+import { DEFAULT_PREFS, type Prefs } from "../config/prefs.ts";
 import { createRootStores } from "../state/root.ts";
 import {
   cycleJobLogMode,
@@ -18,13 +18,10 @@ import {
 } from "./panes/PipelineGraph.tsx";
 
 const basePrefs: Prefs = {
+  ...DEFAULT_PREFS,
   pins: [],
   recentProjects: [],
-  projectScope: "smart",
-  pollIntervalMs: 3000,
-  live: true,
-  sidebarVisible: true,
-  gitlabHost: null,
+  logging: { ...DEFAULT_PREFS.logging },
 };
 
 describe("fmtDur / fmtAge (FR-03/32)", () => {

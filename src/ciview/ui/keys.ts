@@ -27,10 +27,12 @@ export const KEY_BINDINGS: KeyBinding[] = [
     category: "General",
   },
 
-  { key: "j/k", label: "Move project cursor (no open)", category: "Projects" },
-  { key: "Enter", label: "Open project → stage board", category: "Projects" },
+  { key: "j/k", label: "Browse projects (graph updates; no RECENT change)", category: "Projects" },
+  { key: "Enter", label: "Confirm project + pin to RECENT (stay on sidebar)", category: "Projects" },
   { key: "/", label: "Filter projects (live)", category: "Projects" },
   { key: "m", label: "Scope smart→pinned→all", category: "Projects" },
+  { key: "y", label: "RECENT mode activity↔opened", category: "Projects" },
+  { key: "x", label: "Expand RECENT 10↔20", category: "Projects" },
   { key: "p", label: "Pin project under cursor", category: "Projects" },
 
   { key: "h/l", label: "Stage columns (or strip)", category: "Graph" },
@@ -55,7 +57,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export const STATUS_HINT =
-  "?:help  H:host  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m p  r R  q";
+  "?:help  H:host  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m y x p  r R  q";
 
 export function bindingsByCategory(): Map<KeyCategory, KeyBinding[]> {
   const map = new Map<KeyCategory, KeyBinding[]>();

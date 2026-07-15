@@ -31,7 +31,26 @@ No labels for project path, user id, job id, email, uuid, session id.
 | info | session start host, openProject id |
 | debug | poll tick interval |
 
-Never log tokens, `Authorization`, or full traces. Format: logfmt or JSON.
+Never log tokens, `Authorization`, or full traces. Format: **JSON lines**.
+
+### File sink (MVP)
+
+| Path | Notes |
+|------|--------|
+| `~/.config/ciview/logs/ciview.log` | active file (`$XDG_CONFIG_HOME/ciview/logs` when set) |
+| `ciview.log.N` | size-rotated siblings |
+
+Config in `~/.config/ciview/config.json` → `logging`:
+
+| Field | Default | Rule |
+|-------|---------|------|
+| `enabled` | `true` | file logging on/off |
+| `level` | `info` | `error` \| `warn` \| `info` \| `debug` |
+| `maxAgeMs` | `3600000` | **hard cap 1 hour** — older files pruned |
+| `maxBytes` | `1048576` | rotate active file by size |
+| `maxFiles` | `3` | rotation chain length |
+
+Implementation: `src/ciview/util/logger.ts` + `src/ciview/config/paths.ts`. No tokens in fields. TUI default is **file-only** (no stderr spam).
 
 ## Tracing
 

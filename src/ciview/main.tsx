@@ -10,6 +10,7 @@ import {
 } from "./auth/resolve.ts";
 import { HELP_TEXT, parseArgs } from "./cli/args.ts";
 import { loadPrefs } from "./config/prefs.ts";
+import { configureLogger, logger, pruneLogs } from "./util/logger.ts";
 import { projectFromGitRemote } from "./git/remote.ts";
 import { GitLabClient } from "./gitlab/client.ts";
 import { openProject } from "./nav/openProject.ts";
@@ -30,6 +31,8 @@ async function main() {
   }
 
   const prefs = await loadPrefs();
+  configureLogger(prefs.logging);
+  void pruneLogs();
 
   let hosts;
   try {
@@ -100,6 +103,7 @@ async function main() {
     ready: true,
     fatalError: null,
   });
+  logger.info("session_start", { host: auth.host });
 
   if (needPicker) {
     const cursor = Math.max(

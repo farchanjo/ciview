@@ -3,8 +3,25 @@ import type { JobQueue } from "../runtime/queue.ts";
 import type { RootStores } from "../state/root.ts";
 import { projectViewFlat } from "../ui/panes/ProjectSidebar.tsx";
 
-/** Open project under cursor (or explicit id). Updates recent only here. */
-export function openProject(stores: RootStores, queue: JobQueue, projectId?: number): void {
+export interface SelectProjectOpts {
+  /**
+   * When true (Enter / startup open), push path onto prefs.recentProjects.
+   * j/k preview must leave this false so RECENT order stays stable (FR-37).
+   */
+  recordRecent?: boolean;
+}
+
+/**
+ * Select project under cursor (or explicit id) and load its graph.
+ * Focus always stays on the projects sidebar — never jumps to strip/board.
+ */
+export function selectProject(
+  stores: RootStores,
+  queue: JobQueue,
+  projectId?: number,
+  opts: SelectProjectOpts = {},
+): void {
+  const recordRecent = opts.recordRecent === true;
   const flat = projectViewFlat(stores).flat;
   const id =
     projectId ??
@@ -16,25 +33,53 @@ export function openProject(stores: RootStores, queue: JobQueue, projectId?: num
   if (!proj) return;
 
   const sel = stores.selection.get();
-  stores.selection.set({
-    projectId: id,
-    pipelineId: null,
-    jobId: null,
-    projectGen: sel.projectGen + 1,
-    pipelineGen: sel.pipelineGen + 1,
-    jobGen: sel.jobGen + 1,
-  });
+  const alreadyOpen = sel.projectId === id;
 
-  const recent = pushRecent(stores.prefs.get().recentProjects, proj.pathWithNamespace);
-  stores.prefs.patch({ recentProjects: recent });
-  void queue.enqueue({ kind: "SavePrefs", key: "prefs:save", band: "idle" });
+  if (!alreadyOpen) {
+    stores.selection.set({
+      projectId: id,
+      pipelineId: null,
+      jobId: null,
+      projectGen: sel.projectGen + 1,
+      pipelineGen: sel.pipelineGen + 1,
+      jobGen: sel.jobGen + 1,
+    });
+    stores.chrome.patch({
+      logOpen: false,
+      board: { pipelineIndex: 0, stageIndex: 0, jobIndex: 0 },
+      pipelineStack: [],
+    });
+  }
 
-  stores.chrome.patch({
-    focusedPane: "pipeline_strip",
-    logOpen: false,
-    board: { pipelineIndex: 0, stageIndex: 0, jobIndex: 0 },
-    pipelineStack: [],
-  });
+  if (recordRecent) {
+    const recent = pushRecent(stores.prefs.get().recentProjects, proj.pathWithNamespace);
+    stores.prefs.patch({ recentProjects: recent });
+    void queue.enqueue({ kind: "SavePrefs", key: "prefs:save", band: "idle" });
+  }
+
+  // Never steal focus out of the projects list while browsing.
+  if (stores.chrome.get().focusedPane === "projects") {
+    // keep projects
+  } else if (!alreadyOpen) {
+    // callers from non-projects (e.g. git remote bootstrap) may leave focus as-is
+  }
+}
+
+/** Enter / explicit open: select + record recent. Alias of selectProject({ recordRecent: true }). */
+export function openProject(
+  stores: RootStores,
+  queue: JobQueue,
+  projectId?: number,
+): void {
+  selectProject(stores, queue, projectId, { recordRecent: true });
+}
+
+/**
+ * j/k browse: select project under cursor so the right pane updates like
+ * the pipeline strip, without touching RECENT.
+ */
+export function previewProjectUnderCursor(stores: RootStores, queue: JobQueue): void {
+  selectProject(stores, queue, undefined, { recordRecent: false });
 }
 
 /**

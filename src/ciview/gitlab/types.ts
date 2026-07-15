@@ -27,6 +27,10 @@ export interface Project {
   webUrl: string;
   pulseStatus?: CiStatus;
   pinned: boolean;
+  /** ISO from GitLab projects API last_activity_at. */
+  lastActivityAt?: string;
+  /** ISO from latest pipeline created_at/updated_at (LoadPulse). */
+  lastPipelineAt?: string;
 }
 
 export interface Pipeline {

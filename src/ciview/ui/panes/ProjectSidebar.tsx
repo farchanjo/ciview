@@ -31,12 +31,16 @@ export function ProjectSidebar(props: { stores: RootStores }) {
     query,
     scope: chrome.projectScope,
     recent: prefs.recentProjects,
+    recentMode: prefs.recentMode,
+    recentExpanded: chrome.recentExpanded,
   });
 
   const focused = chrome.focusedPane === "projects";
   const borderColor = focused ? "#58a6ff" : "#30363d";
   const qLabel = query.trim() ? ` /${query.trim().slice(0, 10)}` : "";
-  const title = ` Projects ${view.scope}${qLabel} ${view.shown}/${view.total} `;
+  const modeTag = prefs.recentMode === "activity" ? "·act" : "·open";
+  const staleTag = projects.status === "stale" ? "…" : "";
+  const title = ` Projects ${view.scope}${modeTag}${staleTag}${qLabel} ${view.shown}/${view.total} `;
 
   return (
     <box
@@ -51,7 +55,7 @@ export function ProjectSidebar(props: { stores: RootStores }) {
         height: "100%",
       }}
     >
-      <text fg="#6e7681">j/k · Enter · / m p</text>
+      <text fg="#6e7681">j/k · Enter · / m y x p</text>
       {projects.status === "loading" && projects.items.length === 0 ? (
         <LoadingLine label="loading projects…" />
       ) : null}
@@ -78,7 +82,11 @@ export function ProjectSidebar(props: { stores: RootStores }) {
             </text>
           ) : null}
           {section.items.length === 0 && section.id === "rest" ? (
-            <text fg="#8b949e">  / filter or m=all</text>
+            <text fg="#8b949e">
+              {chrome.recentExpanded
+                ? "  / filter or m=all"
+                : "  / filter · x expand · m=all"}
+            </text>
           ) : null}
           {section.items.map((p) => {
             const flatIdx = view.flat.findIndex((x) => x.id === p.id);
@@ -105,6 +113,7 @@ export function ProjectSidebar(props: { stores: RootStores }) {
 
 export function projectViewFlat(stores: RootStores) {
   const chrome = stores.chrome.get();
+  const prefs = stores.prefs.get();
   const query =
     chrome.filterActive && chrome.focusedPane === "projects"
       ? chrome.filterDraft
@@ -112,6 +121,8 @@ export function projectViewFlat(stores: RootStores) {
   return buildProjectView(stores.projects.get().items, {
     query,
     scope: chrome.projectScope,
-    recent: stores.prefs.get().recentProjects,
+    recent: prefs.recentProjects,
+    recentMode: prefs.recentMode,
+    recentExpanded: chrome.recentExpanded,
   });
 }

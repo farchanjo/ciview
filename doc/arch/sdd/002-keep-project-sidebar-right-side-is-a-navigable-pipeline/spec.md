@@ -72,17 +72,20 @@ remains (ADR-0002).
 
 ### Project list stability
 
-6. **FR-35 Cursor vs open.** In the project sidebar:
-   - `j`/`k` move **cursor only** (highlight). They must **not** call
-     `pushRecent`, must **not** reorder the list, and must **not** enqueue
-     LoadPipelines.
-   - **Enter** (or explicit “open project”) **opens** the project: updates
-     selection, `pushRecent`, SavePrefs, LoadPipelines (user, with loading).
+6. **FR-35 Browse selects graph; focus stays.** In the project sidebar:
+   - `j`/`k` move cursor **and** select the project under cursor so the right
+     pane updates (pipelines + stage board), same model as the pipeline strip.
+     They must **not** call `pushRecent` and must **not** reorder the list.
+     Focus **stays** on the projects pane (never auto-jump to strip/board).
+   - **Enter** records RECENT (`pushRecent` + SavePrefs) for the current
+     project; selection/load may already match from j/k. Focus stays on projects.
+   - Pipeline strip **Enter** does **not** move focus to the stage board.
 7. **FR-36 Single primary highlight.** While browsing projects, one clear
-   cursor highlight. Optional secondary style for “currently open project”
-   (the one whose graph is shown) that does not fight the cursor.
-8. **FR-37 RECENT updates only on open.** `prefs.recentProjects` changes only
-   when a project is opened (Enter), not on cursor pass.
+   cursor highlight. Optional secondary style when open project differs from
+   cursor (should be rare while j/k-select is active).
+8. **FR-37 RECENT updates only on Enter.** `prefs.recentProjects` changes only
+   when a project is confirmed with Enter (or explicit open with recordRecent),
+   not on j/k browse.
 
 ### Loading and live
 

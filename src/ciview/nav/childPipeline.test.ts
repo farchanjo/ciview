@@ -1,17 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { Prefs } from "../config/prefs.ts";
+import { DEFAULT_PREFS, type Prefs } from "../config/prefs.ts";
 import { createRootStores } from "../state/root.ts";
 import { openChildPipeline, openJobLog, openProject, popChildPipeline } from "./openProject.ts";
 import type { JobQueue } from "../runtime/queue.ts";
 
 const basePrefs: Prefs = {
-  gitlabHost: null,
+  ...DEFAULT_PREFS,
   pins: [],
   recentProjects: [],
-  projectScope: "smart",
-  pollIntervalMs: 3000,
-  live: true,
-  sidebarVisible: true,
+  logging: { ...DEFAULT_PREFS.logging },
 };
 
 function mockQueue(): JobQueue {

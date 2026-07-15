@@ -5,8 +5,41 @@ import {
   mapBridge,
   mapJob,
   mapPipeline,
+  mapProject,
+  projectActivityRankMs,
 } from "./map.ts";
 import type { Job } from "./types.ts";
+
+describe("mapProject", () => {
+  test("maps last_activity_at", () => {
+    const p = mapProject(
+      {
+        id: 1,
+        path_with_namespace: "a/b",
+        name: "b",
+        web_url: "https://x",
+        last_activity_at: "2026-07-01T12:00:00Z",
+      },
+      false,
+    );
+    expect(p.lastActivityAt).toBe("2026-07-01T12:00:00Z");
+    expect(projectActivityRankMs(p)).toBeGreaterThan(0);
+  });
+
+  test("prefers lastPipelineAt for rank", () => {
+    const p = mapProject(
+      {
+        id: 1,
+        path_with_namespace: "a/b",
+        name: "b",
+        last_activity_at: "2020-01-01T00:00:00Z",
+      },
+      false,
+    );
+    const withPipe = { ...p, lastPipelineAt: "2026-07-01T00:00:00Z" };
+    expect(projectActivityRankMs(withPipe)).toBeGreaterThan(projectActivityRankMs(p));
+  });
+});
 
 describe("mapPipeline (FR-03/04)", () => {
   test("maps duration and core fields", () => {

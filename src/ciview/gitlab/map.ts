@@ -1,13 +1,28 @@
 import type { Job, Pipeline, Project, StageGroup } from "./types.ts";
 
 export function mapProject(raw: Record<string, unknown>, pinned: boolean): Project {
+  const lastActivity =
+    raw.last_activity_at != null
+      ? String(raw.last_activity_at)
+      : raw.lastActivityAt != null
+        ? String(raw.lastActivityAt)
+        : undefined;
   return {
     id: Number(raw.id),
     pathWithNamespace: String(raw.path_with_namespace ?? raw.pathWithNamespace ?? ""),
     name: String(raw.name ?? ""),
     webUrl: String(raw.web_url ?? raw.webUrl ?? ""),
     pinned,
+    lastActivityAt: lastActivity,
   };
+}
+
+/** Rank timestamp for RECENT activity mode: prefer last pipeline, else activity. */
+export function projectActivityRankMs(p: Project): number {
+  const iso = p.lastPipelineAt ?? p.lastActivityAt;
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
 }
 
 export function mapPipeline(raw: Record<string, unknown>): Pipeline {
