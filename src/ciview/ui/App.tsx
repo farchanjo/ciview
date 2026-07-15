@@ -487,9 +487,7 @@ export function App({ stores, queue, client, onQuit }: AppProps) {
     <box style={{ flexDirection: "column", width: "100%", height: "100%" }}>
       <StatusBar stores={stores} />
       {chrome.filterActive ? (
-        <text fg="#f5c518">
-          / projects: {chrome.filterDraft}_
-        </text>
+        <text fg="#f5c518">/ projects: {chrome.filterDraft}_</text>
       ) : null}
       <box style={{ flexDirection: "row", flexGrow: 1, width: "100%" }}>
         {showSidebar ? <ProjectSidebar stores={stores} /> : null}

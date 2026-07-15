@@ -57,7 +57,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export const STATUS_HINT =
-  "?:help  H:host  j/k  Enter  h/l board  log:n/e/j/k  Esc  / m y x p  r R  q";
+  "?:help  H:host  j/k Enter  h/l board  log:n/e/j/k  Esc  / m y x p  r R  q";
 
 export function bindingsByCategory(): Map<KeyCategory, KeyBinding[]> {
   const map = new Map<KeyCategory, KeyBinding[]>();

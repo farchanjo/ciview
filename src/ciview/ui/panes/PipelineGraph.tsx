@@ -53,7 +53,7 @@ export function formatJobBoardLine(
   maxLen: number,
   nowMs: number = Date.now(),
 ): string {
-  const prefix = `${statusGlyph(job.status)} `;
+  const prefix = ` ${statusGlyph(job.status)} `;
   const af = job.allowFailure ? "!" : "";
   const secs = jobDisplayDuration(job, nowMs);
   const dur = secs != null ? ` ${fmtDur(secs)}` : "";
@@ -108,7 +108,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
           padding: 1,
         }}
       >
-        <text fg="#8b949e">Open a project with Enter (j/k only moves cursor)</text>
+        <text fg="#8b949e">Browse a project (j/k) — graph updates on the right</text>
       </box>
     );
   }
@@ -127,10 +127,15 @@ export function PipelineGraph(props: { stores: RootStores }) {
   const belowCount = Math.max(0, pipeItems.length - stripStart - stripCount);
   const overflowHint =
     aboveCount > 0 || belowCount > 0
-      ? `  …${aboveCount > 0 ? ` ↑${aboveCount}` : ""}${aboveCount > 0 && belowCount > 0 ? " ·" : ""}${belowCount > 0 ? ` +${belowCount} more` : ""}`
+      ? `…${aboveCount > 0 ? ` ↑${aboveCount}` : ""}${aboveCount > 0 && belowCount > 0 ? " ·" : ""}${belowCount > 0 ? ` +${belowCount} more` : ""}`
       : null;
-  // Strip box: border chrome (~2) + pipeline rows + optional overflow line
+  // Strip: border chrome (~2) + rows + optional overflow — no padding void.
   const stripBoxHeight = Math.max(3, stripCount + 2 + (overflowHint ? 1 : 0));
+  const stripLineMax = Math.max(
+    24,
+    chrome.termWidth - (sidebarOn ? budget.sidebarWidth + 8 : 10),
+  );
+  const jobLineMax = Math.max(6, colW - 2);
 
   return (
     <box
@@ -157,7 +162,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
         {pipelines.status === "loading" ? <LoadingLine label="loading pipelines…" /> : null}
         {pipelines.error ? <text fg="#f85149">{pipelines.error.slice(0, 60)}</text> : null}
         {pipelines.status !== "loading" && pipeItems.length === 0 ? (
-          <text fg="#8b949e">no pipelines</text>
+          <text fg="#8b949e"> no pipelines</text>
         ) : null}
         {stripVisible.map((p, i) => {
           const absIndex = stripStart + i;
@@ -167,11 +172,11 @@ export function PipelineGraph(props: { stores: RootStores }) {
               pipeline={p}
               active={absIndex === board.pipelineIndex && stripFocus}
               selected={p.id === sel.pipelineId}
-              maxLen={Math.max(24, chrome.termWidth - (sidebarOn ? budget.sidebarWidth + 6 : 8))}
+              maxLen={stripLineMax}
             />
           );
         })}
-        {overflowHint ? <text fg="#6e7681">{overflowHint}</text> : null}
+        {overflowHint ? <text fg="#6e7681"> {overflowHint}</text> : null}
       </box>
 
       <box
@@ -186,13 +191,13 @@ export function PipelineGraph(props: { stores: RootStores }) {
         }}
       >
         {jobsState.status === "loading" ? (
-          <box style={{ flexDirection: "column", padding: 1 }}>
+          <box style={{ flexDirection: "column" }}>
             <LoadingLine label="loading jobs…" />
           </box>
         ) : null}
         {jobsState.error ? <text fg="#f85149">{jobsState.error}</text> : null}
         {jobsState.status !== "loading" && stages.length === 0 ? (
-          <text fg="#8b949e"> no jobs for this pipeline </text>
+          <text fg="#8b949e"> no jobs for this pipeline</text>
         ) : null}
         {stages.map((stage, si) => {
           const stageJobs = jobsInStage(jobsState.items, stage.name);
@@ -200,7 +205,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
           return (
             <box
               key={stage.name}
-              title={` ${stage.name.slice(0, colW - 2)} `}
+              title={` ${stage.name.slice(0, Math.max(4, colW - 2))} `}
               style={{
                 border: true,
                 borderColor: stageActive ? "#58a6ff" : "#30363d",
@@ -213,7 +218,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
               {stageJobs.map((job, ji) => {
                 const cellActive = stageActive && ji === board.jobIndex;
                 const selected = job.id === sel.jobId;
-                const line = formatJobBoardLine(job, colW - 2);
+                const line = formatJobBoardLine(job, jobLineMax);
                 return (
                   <text
                     key={job.id}
@@ -224,7 +229,7 @@ export function PipelineGraph(props: { stores: RootStores }) {
                   </text>
                 );
               })}
-              {stageJobs.length === 0 ? <text fg="#6e7681"> — </text> : null}
+              {stageJobs.length === 0 ? <text fg="#6e7681"> —</text> : null}
             </box>
           );
         })}
@@ -243,8 +248,9 @@ function PipelineStripRow(props: {
   const culprit = p.failedJobName ? ` · ✗${p.failedJobName}` : "";
   const time = fmtDur(p.duration) || fmtAge(p.updatedAt ?? p.createdAt);
   const src = p.source ? ` ${p.source}` : "";
+  // Selection = blue bar; light leading space for inset (no box padding voids).
   const line =
-    `${statusGlyph(p.status)} #${p.iid} ${p.ref}${src} ${p.status}${time ? ` ${time}` : ""}${culprit}`.slice(
+    ` #${p.iid} ${p.ref}${src} ${p.status}${time ? ` ${time}` : ""}${culprit}`.slice(
       0,
       props.maxLen,
     );

@@ -1,9 +1,32 @@
 import { buildProjectView } from "../../projects/filter.ts";
 import type { RootStores } from "../../state/root.ts";
 import { computeLayoutBudget } from "../../util/layoutBudget.ts";
-import { statusColor, statusGlyph } from "../../util/statusGlyph.ts";
+import type { CiStatus } from "../../gitlab/types.ts";
+import { isActiveStatus } from "../../gitlab/types.ts";
+import { statusColor } from "../../util/statusGlyph.ts";
 import { LoadingLine } from "../chrome/LoadingLine.tsx";
 import { useStore } from "../hooks/useStore.ts";
+
+/** Compact CI mark without selection bullets (· / ●). */
+function projectCiMark(status: CiStatus | undefined): string {
+  if (!status) return "";
+  if (isActiveStatus(status)) return "";
+  switch (status) {
+    case "success":
+      return "✓ ";
+    case "failed":
+      return "✗ ";
+    case "canceled":
+    case "cancelled":
+      return "⊘ ";
+    case "skipped":
+      return "– ";
+    case "manual":
+      return "▶ ";
+    default:
+      return "";
+  }
+}
 
 export function ProjectSidebar(props: { stores: RootStores }) {
   const projects = useStore(props.stores.projects);
@@ -20,6 +43,7 @@ export function ProjectSidebar(props: { stores: RootStores }) {
     stageCount: jobs.stages.length,
   });
   const sideW = Math.max(18, budget.sidebarWidth || 28);
+  // Border only (~2 cols); no padding so the list stays dense.
   const lineMax = Math.max(12, sideW - 2);
 
   const query =
@@ -55,27 +79,27 @@ export function ProjectSidebar(props: { stores: RootStores }) {
         height: "100%",
       }}
     >
-      <text fg="#6e7681">j/k · Enter · / m y x p</text>
+      <text fg="#6e7681"> j/k Enter / m y x p</text>
       {projects.status === "loading" && projects.items.length === 0 ? (
         <LoadingLine label="loading projects…" />
       ) : null}
       {projects.error ? (
-        <text fg="#f85149">{projects.error.slice(0, lineMax)}</text>
+        <text fg="#f85149"> {projects.error.slice(0, lineMax - 1)}</text>
       ) : null}
       {projects.status !== "loading" && view.flat.length === 0 ? (
         <text fg="#8b949e">
           {query.trim()
-            ? "no matches"
+            ? " no matches"
             : view.scope === "pinned"
-              ? "no pins"
-              : "type / to filter"}
+              ? " no pins"
+              : " type / to filter"}
         </text>
       ) : null}
       {view.sections.map((section) => (
         <box key={section.id} style={{ flexDirection: "column" }}>
           {section.items.length > 0 || section.id === "rest" ? (
             <text fg="#58a6ff">
-              {`── ${section.title}${section.items.length ? ` (${section.items.length})` : ""} ──`.slice(
+              {` ── ${section.title}${section.items.length ? ` (${section.items.length})` : ""} ──`.slice(
                 0,
                 lineMax,
               )}
@@ -84,17 +108,18 @@ export function ProjectSidebar(props: { stores: RootStores }) {
           {section.items.length === 0 && section.id === "rest" ? (
             <text fg="#8b949e">
               {chrome.recentExpanded
-                ? "  / filter or m=all"
-                : "  / filter · x expand · m=all"}
+                ? " / filter or m=all"
+                : " / filter · x expand · m=all"}
             </text>
           ) : null}
           {section.items.map((p) => {
             const flatIdx = view.flat.findIndex((x) => x.id === p.id);
             const isCursor = flatIdx === chrome.projectCursor && focused;
             const isOpen = p.id === sel.projectId;
-            const prefix = p.pinned ? "★" : isOpen ? "●" : "·";
-            const pulse = statusGlyph(p.pulseStatus);
-            const line = `${prefix}${pulse} ${p.pathWithNamespace}`.slice(0, lineMax);
+            const pin = p.pinned ? "★ " : "";
+            const mark = projectCiMark(p.pulseStatus);
+            // Leading space = light inset without box padding (avoids empty voids).
+            const line = ` ${pin}${mark}${p.pathWithNamespace}`.slice(0, lineMax);
             return (
               <text
                 key={p.id}

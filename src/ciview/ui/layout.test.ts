@@ -51,7 +51,7 @@ describe("formatJobBoardLine (FR-32 duration reserved)", () => {
     );
     expect(line.endsWith(" 47s")).toBe(true);
     expect(line.length).toBeLessThanOrEqual(20);
-    expect(line.startsWith("✓ ")).toBe(true);
+    expect(line.startsWith(" ✓ ")).toBe(true);
   });
 
   test("short name keeps full name and duration", () => {
@@ -64,7 +64,7 @@ describe("formatJobBoardLine (FR-32 duration reserved)", () => {
       },
       22,
     );
-    expect(line).toBe("✓ detect_changes 6s");
+    expect(line).toBe(" ✓ detect_changes 6s");
   });
 
   test("allow_failure marker stays before duration", () => {
@@ -90,7 +90,7 @@ describe("formatJobBoardLine (FR-32 duration reserved)", () => {
       },
       20,
     );
-    expect(line).toBe("● pending_job");
+    expect(line).toBe(" ● pending_job");
   });
 
   test("running job uses startedAt for live elapsed", () => {
