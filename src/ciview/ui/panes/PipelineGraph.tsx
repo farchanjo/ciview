@@ -68,7 +68,9 @@ export function formatJobBoardLine(
 }
 
 function jobsInStage(jobs: Job[], stage: string): Job[] {
-  return jobs.filter((j) => j.stage === stage);
+  return jobs
+    .filter((j) => j.stage === stage)
+    .sort((a, b) => a.id - b.id);
 }
 
 export function PipelineGraph(props: { stores: RootStores }) {
@@ -272,5 +274,5 @@ export function boardJobsInStage(stores: RootStores, stageIndex: number) {
   const stages = stores.jobs.get().stages;
   const stage = stages[stageIndex];
   if (!stage) return [];
-  return stores.jobs.get().items.filter((j) => j.stage === stage.name);
+  return jobsInStage(stores.jobs.get().items, stage.name);
 }

@@ -75,17 +75,27 @@ export function mapBridge(raw: Record<string, unknown>): Job {
   };
 }
 
+/**
+ * Group jobs into stage columns for the board.
+ *
+ * GitLab list-jobs defaults to id DESC, so first-seen stage order is often
+ * reverse of pipeline order (deploy → build). Order stages by minimum job id
+ * ascending — jobs are created in stage order, so min(id) ≈ pipeline order
+ * (left → right: build → test → deploy).
+ */
 export function groupJobsByStage(jobs: Job[]): StageGroup[] {
-  const order: string[] = [];
   const map = new Map<string, number[]>();
   for (const job of jobs) {
-    if (!map.has(job.stage)) {
-      map.set(job.stage, []);
-      order.push(job.stage);
-    }
+    if (!map.has(job.stage)) map.set(job.stage, []);
     map.get(job.stage)!.push(job.id);
   }
-  return order.map((name) => ({ name, jobIds: map.get(name)! }));
+  const stages: StageGroup[] = [];
+  for (const [name, jobIds] of map) {
+    jobIds.sort((a, b) => a - b);
+    stages.push({ name, jobIds });
+  }
+  stages.sort((a, b) => (a.jobIds[0] ?? 0) - (b.jobIds[0] ?? 0));
+  return stages;
 }
 
 export function firstFailedJobName(jobs: Job[]): string | undefined {

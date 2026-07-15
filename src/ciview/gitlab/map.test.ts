@@ -97,8 +97,8 @@ describe("mapJob / mapBridge (FR-05/13)", () => {
   });
 
   test("groupJobsByStage includes bridges in stage order", () => {
+    // Bridges listed first (API order) still sort by min job id → build then trigger.
     const jobs: Job[] = [
-      mapJob({ id: 1, name: "build", stage: "build", status: "success", pipeline: { id: 1 } }),
       mapBridge({
         id: 2,
         name: "child",
@@ -107,11 +107,13 @@ describe("mapJob / mapBridge (FR-05/13)", () => {
         pipeline: { id: 1 },
         downstream_pipeline: { id: 9 },
       }),
+      mapJob({ id: 1, name: "build", stage: "build", status: "success", pipeline: { id: 1 } }),
     ];
     const stages = groupJobsByStage(jobs);
     expect(stages.map((s) => s.name)).toEqual(["build", "trigger"]);
     expect(stages[1]!.jobIds).toEqual([2]);
   });
+
 });
 
 describe("firstFailedJobName (FR-04)", () => {
